@@ -1,0 +1,32 @@
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+MD_SmartCar2	KEYWORD1
+runCmd_t	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+# --- SmartCar2
+begin	KEYWORD2
+setVehicleParameters	KEYWORD2
+run	KEYWORD2
+isRunning	KEYWORD2
+drive	KEYWORD2
+move	KEYWORD2
+spin	KEYWORD2
+stop	KEYWORD2
+setLinearVelocity	KEYWORD2
+getLinearVelocity	KEYWORD2
+setAngularVelocity	KEYWORD2
+getAngularVelocity	KEYWORD2
+getPulsePerRev	KEYWORD2
+startSequence	KEYWORD2
+isSequenceComplete	KEYWORD2
+deg2rad	KEYWORD2
+len2rad	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+MAX_MOTOR	LITERAL1

@@ -1,0 +1,614 @@
+#pragma once
+/**
+\mainpage Robotic Vehicle Library
+
+This library is designed to provide core mobility functions for
+an autonomous two-wheeled robotic vehicle. The library provides
+the code infrastructure that allows the car to travel in a 
+controlled manner, on top of which specific applications can 
+confidently be built.
+
+This library is designed around a commonly obtainable two wheel drive (+ 
+idler castor wheel) vehicle chassis found on online marketplaces that 
+look something like the one below. It is also suitable, with little or no
+modifications, for more capable platforms with similar mechanisms. 
+
+![SmartCar2 Platform] (SmartCar2_Platform.jpg "SmartCar2 Platform")
+
+The vehicle hardware and control system are made up of a number of
+subcomponents that are functionally brought together by the software
+library to function:
+- Robot vehicle chassis (as shown above)
+- \subpage pageMotorController
+
+The control hierarchy implemented in the library is shown in the figure
+below. The library implements the control elements from "Motion Control" 
+to the right of the figure. The components to the left of 'Motion Control' 
+are defined into the application that defines the vehicle's behavior.
+
+![Control Hierarchy] (SmartCar2_Control_Hierarchy.png "Control Hierarchy")
+
+The library is designed to control 2 types of autonomous movements:
+- _Precisely controlled movements_ (eg, spin in place), where the ability to
+  manoeuvre the orientation of the vehicle at low speed is important. 
+  Independent control of motor directions and how far it spins are used as 
+  control parameters for this mode type of movement.
+- _General movements_ (eg, traveling at a set speed in a set direction),
+  where the ability to move more quickly in an specifed path is important. 
+  This type of movement is managed using the \ref pageControlModel "unicycle 
+  model" for control coupled to \ref pagePID "PID control" of the DC motors. 
+
+### Library Topics
+- \subpage pageUsingLibrary
+- \subpage pageHardwareMap
+- \subpage pageControlModel
+- \subpage pageActionSequence
+- \subpage pageMotorController
+
+### Additional Topics
+- \subpage pageRevisionHistory
+- \subpage pageDonation
+- \subpage pageCopyright
+
+### Library dependencies
+- MD_cmdProcessor library located at https://github.com/MajicDesigns/MD_cmdProcessor or the Arduino library manager
+- AccelStepper library is located at https://github.com/waspinator/AccelStepper or the Arduino library manager
+
+\page pageDonation Support the Library
+If you like and use this library please consider making a small donation 
+using [PayPal](https://paypal.me/MajicDesigns/4USD)
+
+\page pageCopyright Copyright
+Copyright (C) 2021 Marco Colli. All rights reserved.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+
+\page pageRevisionHistory Revision History
+Apr 2021 version 1.0.0
+- Initial release
+ */
+
+#include <Arduino.h>
+#include <AccelStepper.h>
+
+ /**
+ * \file
+ * \brief Main header file and class definition for the MD_SmartCar2 library.
+ */
+
+#ifndef SCDEBUG
+#define SCDEBUG  0    ///< set to 1 for library debug output
+#endif
+
+#if SCDEBUG
+#define SCPRINT(s,v)   do { Serial.print(F(s)); Serial.print(v); } while (false)
+#define SCPRINTX(s,v)  do { Serial.print(F(s)); Serial.print(F("0x")); Serial.print(v, HEX); } while (false)
+#define SCPRINTS(s)    do { Serial.print(F(s)); } while (false)
+#else
+#define SCPRINT(s,v)
+#define SCPRINTX(s,v)
+#define SCPRINTS(s)
+#endif
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
+#endif
+
+/**
+ * Core object for the MD_SmartCar2 library
+ */
+class MD_SmartCar2
+{
+public:
+  //--------------------------------------------------------------
+  /** \name Structures, Enumerated Types and Constants.
+   * @{
+   */
+  /**
+    * Maximum number of motors
+    *
+    * Define the maximum number of motors that this library can control
+    */
+  static const uint8_t MAX_MOTOR = 2;
+
+  /**
+   * Enumerated type for Action Items operation
+   * 
+   * Specifies which operation is being defined in the actionItem_t
+   */
+  enum actionId_t
+  {
+    DRIVE,    ///< executes drive(); param 0 lin vel, param 1 angular velocity
+    MOVE,     ///< executes a move(); param 0 left rotate, param 1 right rotate
+    SPIN,     ///< executes a spin(); param 0 spin percentage
+    PAUSE,    ///< executes a pause; param 0 milliseconds pause
+    STOP,     ///< executes a stop()
+    END       ///< marks the end of the action list; should always be last item.
+  };
+  
+  /**
+    * Move sequence item definition
+    * 
+    * Define one of the action elements for a move() sequence.
+    */
+  typedef struct 
+  {
+    actionId_t opId;          ///< id for the action specified by this item
+    float parm[MAX_MOTOR];    ///< function parameter
+  } actionItem_t;
+
+  /** @} */
+
+  //--------------------------------------------------------------
+  /** \name Class constructor and destructor.
+   * @{
+   */
+  /**
+   * Class Constructor
+   *
+   * Instantiate a new instance of the class.
+   * This variant is for motor controllers that have a PWM input for speed control.
+   *
+   * The main function for the core object is to reset the internal
+   * shared variables and timers to default values.
+   *
+   * \param ml The object for controlling the left side motor.
+   * \param el The object to use as the left side encoder input.
+   * \param mr The object for controlling the right side motor.
+   * \param er The object to use as the right side encoder input.
+   */
+  MD_SmartCar2(AccelStepper* ml, AccelStepper* mr);
+
+  /**
+   * Class Destructor.
+   *
+   * Release any allocated memory and clean up anything else.
+   */
+  ~MD_SmartCar2(void);
+  /** @} */
+
+  //--------------------------------------------------------------
+  /** \name Methods for core object control.
+   * @{
+   */
+   /**
+    * Initialize the object.
+    *
+    * Initialize the object data. This needs to be called during setup() to reset new
+    * items that cannot be done during object creation.
+    *
+    * Vehicle constants are passed through to the setVehicleParameters() method. See
+    * comments for that method for more details.
+    *
+    * \sa setVehicleParameters();
+    *
+    * \param ppr    Number of encoder pulses per wheel revolution.
+    * \param ppsMax Maximum number of encoder pulses per second at top speed (100% velocity).
+    * \param dWheel Wheel diameter in mm.
+    * \param lBase  Base length (distance between wheel centers) in mm
+    * \return false if either encoder did not reset, true otherwise.
+    */
+  bool begin(uint16_t ppr, uint16_t ppsMax, uint16_t dWheel, uint16_t lBase);
+
+  /**
+   * Set the vehicle constants
+   *
+   * Sets the number of pulses per encoder revolution, maximum speed reading and
+   * important dimensions for the vehicle. This depends on the hardware and could
+   * vary between different vehicle configurations.
+   *
+   * For encoder ppr, there is only one value for all whole vehicle, so all
+   * encoders need to operate the same way.
+   * 
+   * \sa begin(), \ref pageUsingLibrary
+   *
+   * \param ppr    Number of encoder pulses per wheel revolution.
+   * \param ppsMax Maximum number of encoder pulses per second at top speed (100% velocity).
+   * \param dWheel Wheel diameter in mm.
+   * \param lBase  Base length (distance between wheel centers) in mm
+   */
+  void setVehicleParameters(uint16_t ppr, uint16_t ppsMax, uint16_t dWheel, uint16_t lBase);
+
+  /**
+   * Run the Robot Management Services.
+   *
+   * This is called every iteration through loop() to run all the required
+   * Smart Car Management functions.
+   */
+  void run(void);
+
+  /**
+   * Check if motors are running
+   *
+   * Check if motors are commanded to run. This method is useful to check when
+   * drive() or move() have completed their motions.
+   *
+   * \return true if any of the motors are not idle
+   */
+  bool isRunning(void);
+
+  /**
+   * Check if specific motor is running
+   *
+   * Check if motors are commanded to run. This method is useful to check when
+   * drive() or move() have completed their motions.
+   *
+   * \param mtr  The motor number being queried [0..MAX_MOTOR-1]
+   * \return true if any of the motors are not idle
+   */
+  bool isRunning(uint8_t mtr) { return(mtr < MAX_MOTOR ? _mData[mtr].state != S_IDLE : false); }
+  /** @} */
+
+  //--------------------------------------------------------------
+  /** \name Methods for free running the vehicle.
+   * @{
+   */
+   /**
+    * Drive the vehicle along specified path (degrees).
+    *
+    * Run the vehicle along a path with the specified velocity and angular orientation.
+    * Moves the motors under PID control.
+    *
+    * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
+    * Positive velocity move the vehicle forward, negative moves it in reverse.
+    *
+    * Angular velocity is specified in degrees per second [-90..90]. Positive angle
+    * is clockwise rotation.
+    *
+    * \sa getLinearVelocity(), getAngularVelocity()
+    *
+    * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
+    * \param vAngularD the angular velocity in degrees per second [-90..90].
+    */
+  void drive(int8_t vLinear, int8_t vAngularD) { drive(vLinear, deg2rad(vAngularD)); }
+
+  /**
+   * Drive the vehicle along a straight path.
+   *
+   * Run the vehicle along a straight path with the specified velocity.
+   * Moves the motors under PID control.
+   *
+   * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
+   * Positive velocity move the vehicle forward, negative moves it in reverse.
+   *
+   * \sa getLinearVelocity()
+   *
+   * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
+   */
+  void drive(int8_t vLinear) { drive(vLinear, (float)0.0); }
+
+  /**
+   * Drive the vehicle along specified path (radians).
+   *
+   * Run the vehicle along a path with the specified velocity and angular orientation.
+   * Moves the motors under PID control.
+   *
+   * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
+   * Positive velocity move the vehicle forward, negative moves it in reverse.
+   *
+   * Angular velocity direction is specified in radians per second [-pi/2..pi/2]. Positive
+   * angle is clockwise rotation.
+   *
+   * \sa getLinearVelocity(), getAngularVelocity()
+   *
+   * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
+   * \param vAngularR the angular velocity in radians per second [-pi/2..pi/2].
+   */
+  void drive(int8_t vLinear, float vAngularR);
+
+  /**
+   * Stop the smart car.
+   *
+   * This method will sets all velocities to 0 and disables all the motor functions to
+   * bring the smart car to a complete stop.
+   *
+   * \sa setSpeed()
+   */
+  void stop(void);
+
+  /**
+   * Set the linear velocity
+   *
+   * Sets the linear velocity without changing any other parameters. Useful for
+   * adjusting the speed when already in motion.
+   *
+   * The velocity is specified as a percentage of the maximum vehicle velocity [+/- 0..100].
+   * Positive velocity move the vehicle forward, negative moves it in reverse.
+   *
+   * /sa getLinearVelocity(), drive()
+   *
+   * \param vel the new value for the linear velocity [-100..100].
+   */
+  void setLinearVelocity(int8_t vel);
+
+  /**
+   * Get the current linear velocity.
+   *
+   * Linear velocity is expressed as a percentage of the maximum velocity [0..100].
+   * The Master velocity is used to regulate all the speed functions for the motors.
+   *
+   * \sa drive()
+   *
+   * \return the current linear speed setting.
+   */
+  inline int8_t getLinearVelocity(void) { return(_vLinear); }
+
+  /**
+   * Set the angular velocity (radians).
+   *
+   * Sets the angular velocity without changing any other parameters. Useful for
+   * adjusting turning when already in motion.
+   *
+   * Angular velocity is expressed in radians relative to the forward direction
+   * [-PI/2..PI/2]. Positive angle is turn to the right, negative left.
+   *
+   * \sa getAngularVelocity(), drive()
+   *
+   * \param angR the new turning rate in radians.
+   */
+  inline void setAngularVelocity(float angR) { drive(_vLinear, angR); }
+
+  /**
+   * Set the angular velocity (degrees).
+   *
+   * Sets the angular velocity without changing any other parameters. Useful for
+   * adjusting turning when already in motion.
+   *
+   * Angular velocity is expressed in degrees relative to the forward direction
+   * [-90..90]. Positive angle is turn to the right, negative left.
+   *
+   * \sa getAngularVelocity(), drive()
+   *
+   * \param angD the new turning rate in degrees.
+   */
+  inline void setAngularVelocity(int8_t angD) { drive(_vLinear, deg2rad(angD)); }
+
+  /**
+   * Get the current angular velocity.
+   *
+   * Angular velocity is expressed in radians relative to the forward direction
+   * [-PI/2..PI/2]. Positive angle is turn to the right, negative left.
+   *
+   * \sa drive()
+   *
+   * \return the current angular speed setting.
+   */
+  inline float getAngularVelocity(void) { return(_vAngular); }
+
+  /** @} */
+
+  //--------------------------------------------------------------
+  /** \name Methods for precision movements of the vehicle.
+   * @{
+   */
+   /**
+   * Precisely move the vehicle (radians).
+   *
+   * Controls the movement by counting the encoder pulses rather that PID,
+   * which should make it more precise and controlled. This is useful for specific
+   * movements run at slow speed.
+   *
+   * The call to move() specifies the angle each wheels will turn, independently.
+   * This method is designed to allow close movements such as spin-in-place or
+   * other short precise motions.
+   *
+   * The motion for each wheel is specified as speed as the total angle subtended
+   * by the turned by the wheel in radians. Negative angle is a reverse wheel
+   * rotation.
+   *
+   * \sa drive(), spin(), len2rad()
+   *
+   * \param angL left wheel angle subtended by the motion in radians.
+   * \param angR right wheel angle subtended by the motion in radians.
+   */
+  void move(float angL, float angR);
+
+  /**
+  * Precisely move the vehicle (degrees).
+  *
+  * Controls the movement by counting the encoder pulses rather that PID,
+  * which should make it more precise and controlled. This is useful for specific
+  * movements run at slow speed.
+  *
+  * The call to move() specifies the precise motion of the motors, independently.
+  * This method is designed to allow close movements such as spin-in-place or
+  * other short precise motions.
+  *
+  * The motion for each wheel is specified as speed as the total angle subtended
+  * by the turned by the wheel in degrees. Negative angle is a reverse wheel rotation.
+  *
+  * \sa drive(), spin()
+  *
+  * \param angL left wheel angle subtended by the motion in degrees.
+  * \param angR right wheel angle subtended by the motion in degrees.
+  */
+  void move(int16_t angL, int16_t angR) { move(deg2rad(angL), deg2rad(angR)); }
+
+  /**
+  * Precisely move the vehicle (millimeter).
+  *
+  * Controls the movement by counting the encoder pulses rather that PID,
+  * which should make it more precise and controlled. This is useful for specific
+  * movements run at slow speed.
+  *
+  * The call to move() specifies the precise motion of the motors, independently.
+  * This method is designed to allow close movements such as spin-in-place or
+  * other short precise motions.
+  *
+  * The motion for each wheel will be identical to move the vehicle the required
+  * distance. Negative length is a reverse wheel rotation.
+  *
+  * \sa drive(), spin()
+  *
+  * \param len distance to move in mm.
+  */
+  void move(int16_t len) { move(len2rad(len), len2rad(len)); }
+
+  /**
+  * Precisely spin the vehicle.
+  *
+  * Controls the movement by spinning the vehicle about its central vertical
+  * axis. It works similar to move() to spin the wheels in an directions to
+  * effect the turning motion.
+  *
+  * The call to spin() specifies the percentage (-100 to 100) of the full circle
+  * rotation about the central axis passing through the vehicle base length.
+  * Positive angle is a turn to the right, negative to the left.
+  *
+  * \sa drive(), move()
+  *
+  * \param fraction Percentage fraction of full revolution [-100..100]. Positive spins right; negative pins left.
+  */
+  void spin(int16_t fraction);
+
+  /**
+   * Start an action sequence stored in PROGMEM.
+   * 
+   * This method passed the reference to an action sequence array stored in PROGMEM
+   * to the library for background execution.
+   * 
+   * Details on actions sequences can be found at \ref pageActionSequence
+   * 
+   * \sa isSequenceComplete()
+   * 
+   * \param actionList pointer to the array of actionItem_t ending with and END record.
+   */
+  void startSequence(const actionItem_t* actionList);
+
+  /** 
+   * Start an action sequence stored in RAM.
+   * 
+   * This method passed the reference to an action sequence array stored in RAM
+   * to the library for background execution. The array must remain in scope
+   * (ie, global or static declaration) for the duration of the sequence 
+   * running.
+   *
+   * Details on actions sequences can be found at \ref pageActionSequence
+   *
+   * \sa isSequenceComplete()
+   *
+   * \param actionList pointer to the array of actionItem_t ending with and END record.
+   */
+  void startSequence(actionItem_t* actionList);
+
+  /**
+   * Check if the current action sequence has completed.
+   * 
+   * Once an action sequqnce is started it will automatically execute to 
+   * completion unless interrupted. This method checks to see if the
+   * action sequqnce has completed.
+   * 
+   * \sa startSequence()
+   * 
+   * \return true if the sequence has finished executing
+   */
+  bool isSequenceComplete(void) { return(!_inSequence); }
+
+  /** @} */
+  //--------------------------------------------------------------
+  /** \name Methods for Configuration Management.
+   * @{
+   */
+  /**
+   * Read pulses per wheel revolution
+   *
+   * Returns the number of pulses per encoder revolution. This may be needed to 
+   * change from number of pulses to revolutions and then distance.
+   *
+   * \sa setVehicleParameters()
+   *
+   * \return The number of pulses per revolution.
+   */
+  inline uint16_t getPulsePerRev() { return(_ppr); }
+
+  /** @} */
+  //--------------------------------------------------------------
+  /** \name Utility methods.
+   * @{
+   */
+  /**
+   * Convert degrees to radians.
+   *
+   * Convert the degrees measure specified into radians.
+   *
+   * \param deg the value in degrees to be converted.
+   * \return the converted value
+   */
+  inline float deg2rad(int16_t deg) { return((PI * (float)deg) / 180.0); }
+
+  /**
+   * Convert a length to angle of wheel rotation.
+   * 
+   * Convert a length in mm to travel into the radan of wheel rotation 
+   * required for that travel.
+   * 
+   * \param len length in mm to convert.
+   * \return the angle in radians of wheel rotation to achieve that distance.
+   */
+  inline float len2rad(int16_t len) { return(((float)len * 2 * PI) / (_lenPerPulse * _ppr)); }
+
+  /** @} */
+
+private:
+  // Motor array indices
+  const uint8_t MLEFT = 0;      ///< Array index for the Left motor
+  const uint8_t MRIGHT = 1;     ///< Array index for the right motor
+
+  enum runState_t { S_IDLE, S_DRIVE_INIT, S_DRIVE_RUN, S_MOVE_INIT, S_MOVE_RUN };
+
+  float _vMaxLinear;      ///< Maximum linear speed in pulses/second 
+  int16_t _vLinear;       ///< Master velocity setting as percentage [+/- 0..100] = [+/- 0.._vMaxLinear]
+  float _vAngular;        ///< angular velocity in in radians per second [-PI..PI]
+
+  // Vehicle constants
+  uint16_t _ppr;          ///< Encoder pulses per wheel revolution
+  uint16_t _ppsMax;       ///< Maximum speed in pulses per second
+  uint16_t _diaWheel;     ///< Wheel diameter in mm
+  uint16_t _lenBase;      ///< Base length in mm (distance between wheel centers)
+
+  float _lenPerPulse;     ///< Length traveled per pulse of wheel revolution
+  float _diaWheelP;       ///< Wheel diameter in pulses (calculated)
+  float _lenBaseP;        ///< Base Length in pulses (calculated)
+
+  // Data for tracking action sequences
+  bool _inSequence;       ///< true if currently executing a sequence
+  bool _inAction;         ///< waiting for current item to complete
+  bool _seqIsConstant;    ///< true if sequence is stored is declared in PROGMEM
+  union 
+  {                 ///< current list of actions being sequenced
+    const actionItem_t* cp; 
+    actionItem_t* p;
+  } _uAction;
+  uint8_t _curActionItem; ///< index for the current action item
+  actionItem_t _ai;       ///< current action item
+  uint32_t _timeStartSeq; ///< generic time variable for sequences
+
+  // Motor state data used to manage each motor
+  struct motorData_t
+  {
+    AccelStepper   *motor; ///< motor controller
+
+    int16_t     speed;     ///< required speed in pulses/s
+    int16_t     pulse;        ///< number of pulses set (+/-) 
+    runState_t  state;     ///< control state for this motor
+  };
+  
+  motorData_t _mData[MAX_MOTOR];  ///< keeping track of each motor's parameters
+
+  // Private Methods
+  void startSeqCommon(void);            ///< common part of sequence start
+  void runSequence(void);               ///< keep running current sequence
+  bool runActionItem(actionItem_t& ai); ///< run the logic for this action item
+};
