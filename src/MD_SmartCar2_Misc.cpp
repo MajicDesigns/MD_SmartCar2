@@ -5,12 +5,13 @@
  * \brief Code file for SmartCar2 miscellaneous methods.
  */
 
-void MD_SmartCar2::setLinearVelocity(int8_t vel)
+void MD_SmartCar2::setAccelProfile(uint16_t timebase, uint8_t steps)
 {
-  if (vel == 0)
-    stop();
-  else
-    drive(vel, _vAngular);
+  if (timebase == 0) timebase = 1;
+  if (steps == 0) steps = 1;
+
+  _accelTime = timebase;
+  _accelSteps = steps;
 }
 
 bool MD_SmartCar2::isRunning(void)
@@ -31,12 +32,6 @@ void MD_SmartCar2::setVehicleParameters(uint16_t ppr, uint16_t ppsMax, uint16_t 
   _ppsMax = ppsMax;
   _diaWheel = dWheel;
   _lenBase = lBase;
-
-  for (uint8_t i = 0; i < MAX_MOTOR; i++)
-  {
-    _mData[i].motor->setMaxSpeed(ppsMax);
-    _mData[i].motor->setAcceleration(ppsMax / 2);
-  }
 
   // now calculate derived constants
   _lenPerPulse = (PI * (float)_diaWheel) / (float)_ppr;   // distance traveled per encoder pulse

@@ -7,9 +7,9 @@
 
 // ------------------------------------
 // Global Variables
-// Initialize with pin sequence IN1-IN3-IN2-IN4 for using the AccelStepper with 28BYJ-48
-AccelStepper MR(AccelStepper::HALF4WIRE, PIN_INA1, PIN_INA3, PIN_INA2, PIN_INA4);
-AccelStepper ML(AccelStepper::HALF4WIRE, PIN_INB2, PIN_INB4, PIN_INB1, PIN_INB3);
+// Initialize with pin sequence IN1-IN2-IN3-IN4 for using the MD_Stepper with 28BYJ-48
+MD_Stepper MR(PIN_INA1, PIN_INA2, PIN_INA3, PIN_INA4);
+MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);
 
 MD_SmartCar2 Car(&ML, &MR); 
 

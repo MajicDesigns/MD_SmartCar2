@@ -3,22 +3,24 @@
 \mainpage Robotic Vehicle Library
 
 This library is designed to provide core mobility functions for
-an autonomous two-wheeled robotic vehicle. The library provides
-the code infrastructure that allows the car to travel in a 
-controlled manner, on top of which specific applications can 
-confidently be built.
+an autonomous two-wheeled robotic vehicle using stepper motors 
+controlled using the AccelStepper library.
 
-This library is designed around a commonly obtainable two wheel drive (+ 
-idler castor wheel) vehicle chassis found on online marketplaces that 
-look something like the one below. It is also suitable, with little or no
-modifications, for more capable platforms with similar mechanisms. 
+This library provides the code infrastructure that allows the 
+car to travel in a controlled manner, on top of which specific 
+applications can confidently be built.
 
-![SmartCar2 Platform] (SmartCar2_Platform.jpg "SmartCar2 Platform")
+This library is designed around a two wheel drive (+ idler castor 
+wheel) vehicle chassis similar to the one below. It should also be 
+suitable, with little or no modifications, for more capable 
+platforms with similar mechanisms. 
+
+![SmartCar2 Platform] (SmartCar2_Platform.png "SmartCar2 Platform")
 
 The vehicle hardware and control system are made up of a number of
 subcomponents that are functionally brought together by the software
 library to function:
-- Robot vehicle chassis (as shown above)
+- \subpage pageVehicleHardware
 - \subpage pageMotorController
 
 The control hierarchy implemented in the library is shown in the figure
@@ -34,16 +36,17 @@ The library is designed to control 2 types of autonomous movements:
   Independent control of motor directions and how far it spins are used as 
   control parameters for this mode type of movement.
 - _General movements_ (eg, traveling at a set speed in a set direction),
-  where the ability to move more quickly in an specifed path is important. 
+  where the ability to move more quickly in an specified path is important. 
   This type of movement is managed using the \ref pageControlModel "unicycle 
   model" for control coupled to \ref pagePID "PID control" of the DC motors. 
 
 ### Library Topics
-- \subpage pageUsingLibrary
+- \subpage pageVehicleHardware
 - \subpage pageHardwareMap
+- \subpage pageMotorController
+- \subpage pageUsingLibrary
 - \subpage pageControlModel
 - \subpage pageActionSequence
-- \subpage pageMotorController
 
 ### Additional Topics
 - \subpage pageRevisionHistory
@@ -77,11 +80,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 \page pageRevisionHistory Revision History
 Apr 2021 version 1.0.0
-- Initial release
+- Initial release created from MD_SmartCar
  */
 
 #include <Arduino.h>
-#include <AccelStepper.h>
+#include <MD_Stepper.h>
 
  /**
  * \file
@@ -119,7 +122,7 @@ public:
   /**
     * Maximum number of motors
     *
-    * Define the maximum number of motors that this library can control
+    * Define the maximum number of motors that this library will control
     */
   static const uint8_t MAX_MOTOR = 2;
 
@@ -164,12 +167,10 @@ public:
    * The main function for the core object is to reset the internal
    * shared variables and timers to default values.
    *
-   * \param ml The object for controlling the left side motor.
-   * \param el The object to use as the left side encoder input.
-   * \param mr The object for controlling the right side motor.
-   * \param er The object to use as the right side encoder input.
+   * \param ml The MD_Stepper object for controlling the left side motor.
+   * \param mr The MD_Stepper object for controlling the right side motor.
    */
-  MD_SmartCar2(AccelStepper* ml, AccelStepper* mr);
+  MD_SmartCar2(MD_Stepper* ml, MD_Stepper* mr);
 
   /**
    * Class Destructor.
@@ -259,15 +260,15 @@ public:
     * Drive the vehicle along specified path (degrees).
     *
     * Run the vehicle along a path with the specified velocity and angular orientation.
-    * Moves the motors under PID control.
     *
     * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
-    * Positive velocity move the vehicle forward, negative moves it in reverse.
+    * Positive velocity move the vehicle forward, negative moves it in reverse. The speed
+    * will be adjusted using the acceleration parameters.
     *
     * Angular velocity is specified in degrees per second [-90..90]. Positive angle
     * is clockwise rotation.
     *
-    * \sa getLinearVelocity(), getAngularVelocity()
+    * \sa getLinearVelocity(), getAngularVelocity(), setAccelProfile()
     *
     * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
     * \param vAngularD the angular velocity in degrees per second [-90..90].
@@ -278,30 +279,30 @@ public:
    * Drive the vehicle along a straight path.
    *
    * Run the vehicle along a straight path with the specified velocity.
-   * Moves the motors under PID control.
    *
-   * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
-   * Positive velocity move the vehicle forward, negative moves it in reverse.
+   * The velocity is specified as a percentage of the maximum vehicle velocity [-100..100].
+   * Positive velocity move the vehicle forward, negative moves it in reverse. The speed
+   * will be adjusted using the acceleration parameters.
    *
-   * \sa getLinearVelocity()
+   * \sa getLinearVelocity(), setAccelProfile()
    *
    * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
    */
-  void drive(int8_t vLinear) { drive(vLinear, (float)0.0); }
+  void drive(int8_t vLinear) { drive(vLinear, (float)0); }
 
   /**
    * Drive the vehicle along specified path (radians).
    *
    * Run the vehicle along a path with the specified velocity and angular orientation.
-   * Moves the motors under PID control.
    *
-   * The velocity is specified as a percentage of the maximum vehicle velocity [0..100].
-   * Positive velocity move the vehicle forward, negative moves it in reverse.
+   * The velocity is specified as a percentage of the maximum vehicle velocity [-100..100].
+   * Positive velocity move the vehicle forward, negative moves it in reverse. The speed
+   * will be adjusted using the acceleration parameters.
    *
    * Angular velocity direction is specified in radians per second [-pi/2..pi/2]. Positive
    * angle is clockwise rotation.
    *
-   * \sa getLinearVelocity(), getAngularVelocity()
+   * \sa getLinearVelocity(), getAngularVelocity(), setAccelProfile()
    *
    * \param vLinear   the linear velocity as a percentage of full scale [-100..100].
    * \param vAngularR the angular velocity in radians per second [-pi/2..pi/2].
@@ -311,32 +312,34 @@ public:
   /**
    * Stop the smart car.
    *
-   * This method will sets all velocities to 0 and disables all the motor functions to
-   * bring the smart car to a complete stop.
+   * This method brings the SmartCar to an immediate stop.
    *
+   * \param insideSequence set true if this was called from inside a sequence (not for end users)
+   * 
    * \sa setSpeed()
    */
-  void stop(void);
+  void stop(bool insideSequence = false);
 
   /**
    * Set the linear velocity
    *
    * Sets the linear velocity without changing any other parameters. Useful for
-   * adjusting the speed when already in motion.
+   * adjusting the speed when already in motion. The vehicle will accelerate/decelerate
+   * to the new speed.
    *
-   * The velocity is specified as a percentage of the maximum vehicle velocity [+/- 0..100].
+   * The velocity is specified as a percentage of the maximum vehicle velocity [-100..100].
    * Positive velocity move the vehicle forward, negative moves it in reverse.
    *
-   * /sa getLinearVelocity(), drive()
+   * /sa getLinearVelocity(), drive(), setAccelProfile()
    *
    * \param vel the new value for the linear velocity [-100..100].
    */
-  void setLinearVelocity(int8_t vel);
+  void setLinearVelocity(int8_t vel) { drive(vel, _vAngular); } 
 
   /**
    * Get the current linear velocity.
    *
-   * Linear velocity is expressed as a percentage of the maximum velocity [0..100].
+   * Linear velocity is expressed as a percentage of the maximum velocity [-100..100].
    * The Master velocity is used to regulate all the speed functions for the motors.
    *
    * \sa drive()
@@ -386,6 +389,24 @@ public:
    * \return the current angular speed setting.
    */
   inline float getAngularVelocity(void) { return(_vAngular); }
+
+  /**
+  * Set the acceleration profile parameters
+  * 
+  * To make the best use of the stepper motor torque, speed changes are adjusted in 
+  * incremental steps. The number of stepos is given by the __steps__ parameter and 
+  * the time between each step is given by the __timebase__ parameter.
+  *
+  * The library calculates the difference between the 2 speed (S2 - S1) and divides 
+  * this by __steps__. During the acceleration/deceleration, the motor speed is 
+  * changed by this quantity __timebase__ time period until the new speed is reached.
+  * 
+  * Default values are the class private constants DEF_ACCEL_TIME and DEF_ACCEL_STEPS.
+  *
+  * \param timebase time between acceleration steps (in milliseconds)
+  * \param steps    number of dicrete steps between start and end speeds
+  */
+  void setAccelProfile(uint16_t timebase, uint8_t steps);
 
   /** @} */
 
@@ -476,7 +497,7 @@ public:
   /**
    * Start an action sequence stored in PROGMEM.
    * 
-   * This method passed the reference to an action sequence array stored in PROGMEM
+   * This method is passed the reference to an action sequence array stored in PROGMEM
    * to the library for background execution.
    * 
    * Details on actions sequences can be found at \ref pageActionSequence
@@ -490,7 +511,7 @@ public:
   /** 
    * Start an action sequence stored in RAM.
    * 
-   * This method passed the reference to an action sequence array stored in RAM
+   * This method is passed the reference to an action sequence array stored in RAM
    * to the library for background execution. The array must remain in scope
    * (ie, global or static declaration) for the duration of the sequence 
    * running.
@@ -502,6 +523,17 @@ public:
    * \param actionList pointer to the array of actionItem_t ending with and END record.
    */
   void startSequence(actionItem_t* actionList);
+
+  /**
+   * Stop the currently executing sequence.
+   *
+   * This method stops the currently executing sequence in the middle of
+   * the execution stream. This vehicle will be left in an indetermined state
+   * and the sequence will be reported as completed.
+   *
+   * \sa isSequenceComplete()
+   */
+  void stopSequence(void);
 
   /**
    * Check if the current action sequence has completed.
@@ -562,15 +594,33 @@ public:
   /** @} */
 
 private:
-  // Motor array indices
+  const uint32_t DEF_ACCEL_TIME = 100; // time between acceleration steps (ms)
+  const uint8_t DEF_ACCEL_STEPS = 16;  // number of steps between start and end speeds
+  const uint8_t MOVE_SPEED = 40;       // default mnove speed for vehicle (% full speed)
+
+   // Motor array indices
   const uint8_t MLEFT = 0;      ///< Array index for the Left motor
   const uint8_t MRIGHT = 1;     ///< Array index for the right motor
 
-  enum runState_t { S_IDLE, S_DRIVE_INIT, S_DRIVE_RUN, S_MOVE_INIT, S_MOVE_RUN };
+  enum runState_t 
+  { 
+    S_IDLE,         ///< Motor is idle
+    S_ACCEL_INIT,   ///< Motor initialising acceleration from current to setpoint speed
+    S_ACCEL,        ///< Motor acceleration from speed to setpoint speed
+    S_DRIVE_RUN,    ///< Motor running free at setpoint speed
+    S_DECEL_INIT,   ///< Motor initialising decelerating from speed to setpoint speed
+    S_DECEL,        ///< Motor decelerating from speed to setpoint speed
+
+    S_MOVE_INIT,    ///< Motor initialising to move run from idle
+    S_MOVE_RUN      ///< Motor running in move mode (step counts)
+  };
 
   float _vMaxLinear;      ///< Maximum linear speed in pulses/second 
-  int16_t _vLinear;       ///< Master velocity setting as percentage [+/- 0..100] = [+/- 0.._vMaxLinear]
-  float _vAngular;        ///< angular velocity in in radians per second [-PI..PI]
+  int16_t _vLinear;       ///< Master velocity as percentage [-100..100] = [-_vMaxLinear.._vMaxLinear]
+  float _vAngular;        ///< Angular velocity setpoint in in radians per second [-PI..PI]
+
+  uint16_t _accelTime;    ///< acceleration profile time base
+  uint8_t _accelSteps;    ///< number of steps between speeds
 
   // Vehicle constants
   uint16_t _ppr;          ///< Encoder pulses per wheel revolution
@@ -587,10 +637,10 @@ private:
   bool _inAction;         ///< waiting for current item to complete
   bool _seqIsConstant;    ///< true if sequence is stored is declared in PROGMEM
   union 
-  {                 ///< current list of actions being sequenced
+  {                 
     const actionItem_t* cp; 
     actionItem_t* p;
-  } _uAction;
+  } _uAction;             ///< current list of actions being sequenced
   uint8_t _curActionItem; ///< index for the current action item
   actionItem_t _ai;       ///< current action item
   uint32_t _timeStartSeq; ///< generic time variable for sequences
@@ -598,10 +648,12 @@ private:
   // Motor state data used to manage each motor
   struct motorData_t
   {
-    AccelStepper   *motor; ///< motor controller
+    MD_Stepper  *motor;    ///< motor controller
 
-    int16_t     speed;     ///< required speed in pulses/s
-    int16_t     pulse;        ///< number of pulses set (+/-) 
+    uint32_t    timeMark;  ///< generaic time marker used as required
+    int32_t     speedSP;   ///< setpoint speed in pulses/s
+    int32_t     speedCV;   ///< current speed in pulse/s
+    int32_t     pulse;     ///< move pulses set (+/-) or pulse inc/decrement for acceleration
     runState_t  state;     ///< control state for this motor
   };
   

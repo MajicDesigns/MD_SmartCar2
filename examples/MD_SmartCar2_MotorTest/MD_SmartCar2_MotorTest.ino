@@ -18,21 +18,22 @@
 #endif
 
 // Global Variables
-// Initialize with pin sequence IN1-IN3-IN2-IN4 for using the AccelStepper with 28BYJ-48
-AccelStepper MR(AccelStepper::HALF4WIRE, PIN_INA1, PIN_INA3, PIN_INA2, PIN_INA4);
-AccelStepper ML(AccelStepper::HALF4WIRE, PIN_INB2, PIN_INB4, PIN_INB1, PIN_INB3);
+// Initialize with pin sequence IN1-IN2-IN3-IN4 for using the MD_Stepper with 28BYJ-48
+MD_Stepper MR(PIN_INA1, PIN_INA2, PIN_INA3, PIN_INA4);
+MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);
 
 MD_SmartCar2 SC(&ML, &MR);
 
 bool modeStp;     // true if we are in AccelStepper testing mode
+int32_t maxSpeed = 1500;
 
 // cmdProcessor handlers and support functions 
 void handlerHelp(char* param);
 
 // INDIVIDUAL MOTORS TESTING
-void motorSpeed(AccelStepper &M, char m, char* param)
+void motorSpeed(MD_Stepper &M, char m, char* param)
 {
-  int16_t s = 0;
+  int32_t s;
 
   Serial.print(F("\nAS> Speed "));
   Serial.print(m);
@@ -40,17 +41,10 @@ void motorSpeed(AccelStepper &M, char m, char* param)
   s = strtoul(param, nullptr, 10);
   Serial.print(s);
   Serial.print(F("% : "));
-  M.setSpeed((s * M.maxSpeed())/100);
-  Serial.print(M.speed());
-  modeStp = true;
-}
-
-void setSpeed(int16_t s)
-{
-  ML.setMaxSpeed(s);
-  MR.setMaxSpeed(s);
-  ML.setAcceleration(s / 2);
-  MR.setAcceleration(s / 2);
+  s = (s * maxSpeed) / 100L;
+  M.setVelocity(s);
+  M.start();
+  Serial.print(M.getSpeed());
   modeStp = true;
 }
 
@@ -63,12 +57,12 @@ void handlerSM(char* param)
 
   Serial.print(F("\nAS> MaxSpeed "));
   s = strtoul(param, nullptr, 10);
-  setSpeed(s);
-  Serial.print(ML.maxSpeed());
+  maxSpeed = s;
+  Serial.print(maxSpeed);
   modeStp = true;
 }
 
-void handlerXX(char* param) { ML.setSpeed(0); MR.setSpeed(0); modeStp = true; }
+void handlerXX(char* param) { ML.stop(); MR.stop(); modeStp = true; }
 
 // LIBRARY FUNCTIONS TESTING
 void handlerD(char* param)
@@ -99,6 +93,7 @@ void handlerM(char* param)
   Serial.print(al);
   Serial.print(F(" "));
   Serial.print(ar);
+  SC.setLinearVelocity(maxSpeed / 2);
   SC.move((int16_t)al, (int16_t)ar);
   modeStp = false;
 }
@@ -110,6 +105,7 @@ void handlerS(char* param)
   Serial.print(F("\nSC2> Spin "));
   sscanf(param, "%d", &f);
   Serial.print(f);
+  SC.setLinearVelocity(maxSpeed / 2);
   SC.spin((int16_t)f);
   modeStp = false;
 }
@@ -120,10 +116,10 @@ const MD_cmdProcessor::cmdItem_t PROGMEM cmdTable[] =
 {
   { "?",  handlerHelp, "",   "Help", 0 },
   { "h",  handlerHelp, "",   "Help", 0 },
-  { "sl", handlerSL,   "n",  "AS Left speed setting to n % FS [+/- 100]", 1 },
-  { "sr", handlerSR,   "n",  "AS Right speed setting to n % FS [+/- 100]", 1 },
-  { "sm", handlerSM,   "m",  "AS Speed Max in pulse/sec", 1 },
-  { "xx", handlerXX,    "",  "AS Stop all motors", 1 },
+  { "sl", handlerSL,   "n",  "ST Left speed setting to n % FS [+/- 100]", 1 },
+  { "sr", handlerSR,   "n",  "ST Right speed setting to n % FS [+/- 100]", 1 },
+  { "sm", handlerSM,   "m",  "ST Speed Max in pulse/sec", 1 },
+  { "xx", handlerXX,    "",  "ST Stop all motors", 1 },
   { "d",  handlerD,  "v a",  "SC2 Drive vel v [-100..100] ang a [-90..90]", 2 },
   { "m",  handlerM,  "l r",  "SC2 Move wheels subtended angle l, r degrees", 2},
   { "s",  handlerS,    "f",  "SC2 Spin full circle fraction f% [-100, 100]", 2 },
@@ -136,6 +132,7 @@ void handlerHelp(char* param)
 {
   Serial.print(F("\nHelp\n----"));
   CP.help();
+  Serial.print(F("\n\n"));
 }
 
 void setup(void)
@@ -149,17 +146,19 @@ void setup(void)
 
   // start command processor
   CP.begin();
-  CP.help();
+  handlerHelp(nullptr);
 }
 
 void loop(void)
 {
   CP.run();
-  if (modeStp)
-  {
-    ML.runSpeed();
-    MR.runSpeed();
-  }
-  else
+  if (!modeStp)
     SC.run();
+#if !ENABLE_AUTORUN
+  else
+  {
+    ML.run();
+    MR.run();
+  }
+#endif
 }

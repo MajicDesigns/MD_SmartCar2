@@ -2,14 +2,11 @@
 // an AI2 control application using a HC-05 BT module that has 
 // been pre-initialized and paired to the BT master.
 //
-// This is to test 'real-world' motion after the vehicle 
-// parameters have been calibrated.
-// 
-// All Vehicle motion types can be exercised and parameters fine
-// tuned and saved to EEPROM from the AI2 'SmartCar2_Control-Setup' 
+// This is to test 'real-world' motion. All Vehicle motion 
+// types can be exercised from the AI2 'SmartCar2_Control_Setup' 
 // interface application.
 //
-// SmartCar_HW.h contains all the hardware connection pin definitions.
+// SmartCar2_HW.h contains all the hardware connection pin definitions.
 
 #include <SoftwareSerial.h>
 #include <MD_SmartCar2.h>
@@ -19,13 +16,11 @@
 #define ECHO_COMMAND 0    // Echo commands to the Serial stream for debugging
 
 // Global Variables
-// Initialize with pin sequence IN1-IN3-IN2-IN4 for using the AccelStepper with 28BYJ-48
-AccelStepper MR(AccelStepper::HALF4WIRE, PIN_INA1, PIN_INA3, PIN_INA2, PIN_INA4);
-AccelStepper ML(AccelStepper::HALF4WIRE, PIN_INB2, PIN_INB4, PIN_INB1, PIN_INB3);
+// Initialize with pin sequence IN1-IN2-IN3-IN4 for using the MD_Stepper with 28BYJ-48
+MD_Stepper MR(PIN_INA1, PIN_INA2, PIN_INA3, PIN_INA4);
+MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);
 
 MD_SmartCar2 Car(&ML, &MR);  // SmartCar object
-
-const uint8_t FP_SIG = 2;   // floating point significant decimal points
 
 // Global Objects and Variables
 SoftwareSerial BTSerial(PIN_BT_RX, PIN_BT_TX);
@@ -89,12 +84,17 @@ void handlerS(char* param)
  
 void setup(void)
 {
-#if ECHO_COMMAND || SCDEBUG || PID_TUNE
+#if ECHO_COMMAND || SCDEBUG
   Serial.begin(57600);
 #endif
   BTSerial.begin(BT_BAUDRATE);
   if (!Car.begin(PPR, PPS_MAX, DIA_WHEEL, LEN_BASE))   // take all the defaults
+  {
     BTSerial.print(F("\n\n!! Unable to start car"));
+#if ECHO_COMMAND
+    Serial.print(F("\n\n!! Unable to start car"));
+#endif
+  }
 
   CP.begin();
 }
