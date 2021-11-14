@@ -1,9 +1,9 @@
 #pragma once
 
-// SmartCar application hardware, timing and other definitions
+// SmartCar2 application hardware, timing and other definitions
 
 // ------------------------------------
-// SmartCar Physical Constants
+// SmartCar2 Physical Constants
 const uint16_t PPR = 4038;      ///< Stepper pulses per revolution
 const uint16_t PPS_MAX = 1000;  ///< Stepper maximum speed in pulses per second
 const uint16_t DIA_WHEEL = 65;  ///< Wheel diameter in mm
@@ -36,33 +36,44 @@ const uint8_t PIN_BT_TX = 9;   ///< Arduino TX, connect to to BT RX pin. Fixed p
 const uint16_t BT_BAUDRATE = 9600; ///< BT serial connection speed (bps)
 
 // ------------------------------------
-// LCD module connections using I2C hardware connection (if installed)
-const uint8_t LCD_ROWS = 2;  ///< LCD module number of rows (lines down)
-const uint8_t LCD_COLS = 16; ///< LCD module number of columns (characters across)
-
-// ------------------------------------
-// Bumper Switch
+// Bumper Switches
+// Uses hardware I2C which is A4, A5
 const uint16_t BUMPER_POLL_PERIOD = 20;   ///< in milliseconds
 const uint8_t PCF8574_ADDR = 0x20;        ///< PCF 8574 external I/O I2C address
 
 // ------------------------------------
-// Sonar sensors connections (NewPing library - single pin mode)
-const uint16_t SONAR_POLL_PERIOD = 300;   ///< in milliseconds
-const uint8_t PIN_SERVO = A3;  ///< Servo pin
-const uint8_t PIN_SONAR = A2;  ///< Sonar ping sensor pin
+// Buzzer (sound output)
+const uint8_t PIN_BUZZER = 12;  ///< Pin connection for piezo active buzzer
 
-// Define SONAR distance points in cm for decision making
+// ------------------------------------
+// Battery Voltage Sensor
+const uint32_t V_POLL_PERIOD = 30000; ///< in milliseconds
+const uint8_t PIN_VOLTAGE = A0;       ///< Pin connection for voltage divider output
+const float V_FULL = 11.5;            ///< Battery full voltage for 100% scale
+const float V_ALARM = 10.0;           ///< Lowest allowed voltage before shutdown
+
+// ------------------------------------
+// Scan sensors connections 
+const uint16_t SCAN_FAST_POLL = 300;   ///< in milliseconds
+const uint16_t SCAN_SLOW_POLL = 1000;  ///< in milliseconds
+const uint16_t SCAN_WALL_POLL = 500;   ///< in milliseconds
+const uint8_t PIN_SERVO = A3;  ///< Servo pin
+const uint8_t PIN_SCAN = A2;   ///< If used, NewPing library single pin sensor connection
+
+// Define SCAN distance points in cm for decision making
 const uint8_t DIST_ALLCLEAR = 255;  ///< All clear distance (more than DIST_MAX)
 const uint8_t DIST_MAX = 200;       ///< Maximum distance to ping (for ping library)
-const uint8_t DIST_IMPACT = 15;     ///< impact imminent
+const uint8_t DIST_IMPACT = 20;     ///< impact imminent
 const uint8_t DIST_CLOSE = 30;      ///< really close 
-const uint8_t DIST_OBSTACLE = 50;   ///< far obstacle detected
-const uint8_t DIST_CLEAR = 60;      ///< distant object
+const uint8_t DIST_OBSTACLE = 45;   ///< far obstacle detected
+const uint8_t DIST_CLEAR = 80;      ///< distant object
+const uint8_t DIST_WALLFOLLOW = 30; ///< distance from wall (must be > DIST_IMPACT)
 
 // ------------------------------------
 // Miscellaneous values
+const uint32_t HEALTHCHECK_PERIOD = 15000;///< health check period in ms
 const uint32_t TELEMETRY_PERIOD = 1200;   ///< telemetry packet send period in ms when no data changed
 const uint32_t AVOID_ACTIVE_TIME = 1500;  ///< time for AVOID to be acive in ms
 const uint32_t FOLLOW_ACTIVE_TIME = 1000; ///< time for WALLFOLLOWER to be active in ms
 
-const uint8_t FLOAT_DECIMALS = 2;         ///< decimals shown in float values
+const uint8_t FLOAT_DECIMALS = 2;         ///< default decimals shown in float values

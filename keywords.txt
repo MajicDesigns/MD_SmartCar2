@@ -2,7 +2,8 @@
 # Datatypes (KEYWORD1)
 #######################################
 MD_SmartCar2	KEYWORD1
-runCmd_t	KEYWORD1
+actionId_t	KEYWORD1
+actionItem_t	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
@@ -20,8 +21,11 @@ setLinearVelocity	KEYWORD2
 getLinearVelocity	KEYWORD2
 setAngularVelocity	KEYWORD2
 getAngularVelocity	KEYWORD2
+getAccelProfile	KEYWORD2
+getDistancePerPulse	KEYWORD2
 getPulsePerRev	KEYWORD2
 startSequence	KEYWORD2
+stopSequence	KEYWORD2
 isSequenceComplete	KEYWORD2
 deg2rad	KEYWORD2
 len2rad	KEYWORD2

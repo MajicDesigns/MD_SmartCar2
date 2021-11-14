@@ -40,7 +40,7 @@ Together these create an easy and securely connected drive block.
 \page pageMotorController Motor Controller
 
 The library is agnostic to the type of motor controller used. It manages the
-motor functions using the AccelStepper library (https://github.com/waspinator/AccelStepper 
+motor functions using the MD_Stepper library (https://github.com/MajicDesigns/MD_Stepper 
 or the Arduino library manager), so any controllers supported by that library can be used.
 
 MD_SmartCar2 was developed using the inexpensive 28BYJ-48 stepper motors (12V version) 
@@ -68,17 +68,16 @@ for use by any application Application (A) built on top of this library.
 | D7   | A | Spare
 | D8   | A | Spare
 | D9~  | A | Spare
-| D10~ | R | Spare / Default SPI SS
-| D11~*| R | Spare / Hardware SPI MOSI
-| D12* | R | Spare / Hardware SPI MISO
-| D13* | R | Spare / Hardware SPI SCK
+| D11~*| A | Spare / Hardware SPI MOSI
+| D12* | A | Spare / Hardware SPI MISO
+| D13* | A | Spare / Hardware SPI SCK
 | A0   | A | Spare
 | A1   | A | Spare
 | A2   | A | Spare
 | A3   | A | Spare 
-| A4*  | R | Spare / Hardware I2C SDA
-| A5*  | R | Spare / Hardware I2C SCL
-| A6   | A2 | Spare / Nano Analog I/O only
+| A4*  | A | Spare / Hardware I2C SDA
+| A5*  | A | Spare / Hardware I2C SCL
+| A6   | A | Spare / Nano Analog I/O only
 | A7   | A | Spare / Nano Analog I/O only
  
 (*) shared or comms bus pins, (~) hardware PWM pin, (!) external iRQ pin

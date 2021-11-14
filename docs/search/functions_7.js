@@ -6,5 +6,6 @@ var searchData=
   ['setvehicleparameters_3',['setVehicleParameters',['../class_m_d___smart_car2.html#a0e146ca09364c03b15d2bf67f6993f9f',1,'MD_SmartCar2']]],
   ['spin_4',['spin',['../class_m_d___smart_car2.html#ae36cb200b21fdb33a038a222f240ab72',1,'MD_SmartCar2']]],
   ['startsequence_5',['startSequence',['../class_m_d___smart_car2.html#ad3129dd5af2c9ab5c14b00cb2782ccd2',1,'MD_SmartCar2::startSequence(const actionItem_t *actionList)'],['../class_m_d___smart_car2.html#a64d40a89a5d7943b7164cc7201e2f9a6',1,'MD_SmartCar2::startSequence(actionItem_t *actionList)']]],
-  ['stop_6',['stop',['../class_m_d___smart_car2.html#a92243132842fdb8b55e1559146ee5d24',1,'MD_SmartCar2']]]
+  ['stop_6',['stop',['../class_m_d___smart_car2.html#a72d7be3b2b5d62e04b703f3af7433b6b',1,'MD_SmartCar2']]],
+  ['stopsequence_7',['stopSequence',['../class_m_d___smart_car2.html#a904d8a1c51bbe407d373399fd98270f8',1,'MD_SmartCar2']]]
 ];

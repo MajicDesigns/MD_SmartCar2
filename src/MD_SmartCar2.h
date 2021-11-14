@@ -4,22 +4,22 @@
 
 This library is designed to provide core mobility functions for
 an autonomous two-wheeled robotic vehicle using stepper motors 
-controlled using the AccelStepper library.
+controlled using the MD_Stepper library.
 
 This library provides the code infrastructure that allows the 
 car to travel in a controlled manner, on top of which specific 
 applications can confidently be built.
 
-This library is designed around a two wheel drive (+ idler castor 
-wheel) vehicle chassis similar to the one below. It should also be 
-suitable, with little or no modifications, for more capable 
-platforms with similar mechanisms. 
+This library is designed around a custom designed two wheel drive 
+(+ idler castor wheel) vehicle chassis depicted below. The software 
+also be suitable, with little or no modifications, for more capable 
+platforms with similar mechanisms.
 
 ![SmartCar2 Platform] (SmartCar2_Platform.png "SmartCar2 Platform")
 
 The vehicle hardware and control system are made up of a number of
 subcomponents that are functionally brought together by the software
-library to function:
+library:
 - \subpage pageVehicleHardware
 - \subpage pageMotorController
 
@@ -55,7 +55,7 @@ The library is designed to control 2 types of autonomous movements:
 
 ### Library dependencies
 - MD_cmdProcessor library located at https://github.com/MajicDesigns/MD_cmdProcessor or the Arduino library manager
-- AccelStepper library is located at https://github.com/waspinator/AccelStepper or the Arduino library manager
+- MD_Stepper library is located at https://github.com/MajicDesigns/MD_Stepper or the Arduino library manager
 
 \page pageDonation Support the Library
 If you like and use this library please consider making a small donation 
@@ -79,8 +79,8 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 \page pageRevisionHistory Revision History
-Apr 2021 version 1.0.0
-- Initial release created from MD_SmartCar
+Nov 2021 version 1.0.0
+- Initial release created from MD_SmartCar library code
  */
 
 #include <Arduino.h>
@@ -249,7 +249,7 @@ public:
    * \param mtr  The motor number being queried [0..MAX_MOTOR-1]
    * \return true if any of the motors are not idle
    */
-  bool isRunning(uint8_t mtr) { return(mtr < MAX_MOTOR ? _mData[mtr].state != S_IDLE : false); }
+  bool isRunning(uint8_t mtr) { return(mtr < MAX_MOTOR ? _mData[mtr].motor->isBusy() : false); }
   /** @} */
 
   //--------------------------------------------------------------
@@ -565,6 +565,17 @@ public:
    */
   inline uint16_t getPulsePerRev() { return(_ppr); }
 
+  /**
+   * Read linear length moved per wheel pulse
+   *
+   * Returns the distance traveled for each pulse of the motor.
+   *
+   * \sa setVehicleParameters()
+   *
+   * \return The distance travelled with each pulse.
+   */
+  inline float getDistancePerPulse() { return(_lenPerPulse); }
+
   /** @} */
   //--------------------------------------------------------------
   /** \name Utility methods.
@@ -583,7 +594,7 @@ public:
   /**
    * Convert a length to angle of wheel rotation.
    * 
-   * Convert a length in mm to travel into the radan of wheel rotation 
+   * Convert a length in mm to travel into the radian of wheel rotation 
    * required for that travel.
    * 
    * \param len length in mm to convert.
@@ -594,9 +605,9 @@ public:
   /** @} */
 
 private:
-  const uint32_t DEF_ACCEL_TIME = 100; // time between acceleration steps (ms)
+  const uint32_t DEF_ACCEL_TIME = 10;  // time between acceleration steps (ms)
   const uint8_t DEF_ACCEL_STEPS = 16;  // number of steps between start and end speeds
-  const uint8_t MOVE_SPEED = 40;       // default mnove speed for vehicle (% full speed)
+  const uint8_t MOVE_SPEED = 40;       // default move speed for vehicle (% full speed)
 
    // Motor array indices
   const uint8_t MLEFT = 0;      ///< Array index for the Left motor
@@ -605,13 +616,13 @@ private:
   enum runState_t 
   { 
     S_IDLE,         ///< Motor is idle
-    S_ACCEL_INIT,   ///< Motor initialising acceleration from current to setpoint speed
+    S_ACCEL_INIT,   ///< Motor initializing acceleration from current to setpoint speed
     S_ACCEL,        ///< Motor acceleration from speed to setpoint speed
     S_DRIVE_RUN,    ///< Motor running free at setpoint speed
-    S_DECEL_INIT,   ///< Motor initialising decelerating from speed to setpoint speed
+    S_DECEL_INIT,   ///< Motor initializing decelerating from speed to setpoint speed
     S_DECEL,        ///< Motor decelerating from speed to setpoint speed
 
-    S_MOVE_INIT,    ///< Motor initialising to move run from idle
+    S_MOVE_INIT,    ///< Motor initializing to move run from idle
     S_MOVE_RUN      ///< Motor running in move mode (step counts)
   };
 
@@ -650,7 +661,7 @@ private:
   {
     MD_Stepper  *motor;    ///< motor controller
 
-    uint32_t    timeMark;  ///< generaic time marker used as required
+    uint32_t    timeMark;  ///< generic time marker used as required
     int32_t     speedSP;   ///< setpoint speed in pulses/s
     int32_t     speedCV;   ///< current speed in pulse/s
     int32_t     pulse;     ///< move pulses set (+/-) or pulse inc/decrement for acceleration

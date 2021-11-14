@@ -16,11 +16,12 @@ void MD_SmartCar2::setAccelProfile(uint16_t timebase, uint8_t steps)
 
 bool MD_SmartCar2::isRunning(void)
 // check if any of the motors are running
+// reurn true if any motors are running
 {
-  bool b = true;
+  bool b = false;
 
   for (uint8_t i = 0; i < MAX_MOTOR; i++)
-    b = b && _mData[i].state != S_IDLE;
+    b = b || isRunning(i);
 
   return(b);
 }

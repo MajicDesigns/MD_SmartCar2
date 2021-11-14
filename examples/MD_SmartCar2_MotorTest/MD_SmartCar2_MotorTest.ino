@@ -3,7 +3,7 @@
 // This sketch is used to test and set up the stepper motors
 // - AccelStepper setup L/R mnotor independently
 // - Drive() control logic
-// - Move() control logic
+// - Move()/Spin() control logic
 //
 // Application is controlled from the Serial interface.
 // Set Serial monitor to 57600 and ensure line ending is 'newline'

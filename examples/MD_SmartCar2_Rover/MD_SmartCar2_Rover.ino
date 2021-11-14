@@ -19,6 +19,8 @@
 // - NewPing library available from https://bitbucket.org/teckel12/arduino-new-ping/src/master/ or the IDE Library Manager
 // Note: TIMER_ENABLED must be turned off for the NewPing library
 // 
+// - VL53L0X library is available from 
+// 
 // - ServoTimer2 library is available from https://github.com/nabontra/ServoTimer2
 // Note: In ServoTimer2.h change MIN_PULSE_WIDTH to 500 and MAX_PULSE_WIDTH to 2500. 
 //       This enables 0 to 180 degree swing in the servo.
@@ -27,7 +29,9 @@
 #include <AltSoftSerial.h>
 #include <MD_SmartCar2.h>
 #include <MD_cmdProcessor.h>
+#include "SmartCar2_HW.h"
 #include "SmartCar2_Sensors.h"
+#include "SmartCar2_Buzzer.h"
 
 #ifndef ENABLE_DEBUG       
 #define ENABLE_DEBUG 0     // set to 1 to enable serial debugging info
@@ -82,13 +86,18 @@
 // Global states
 bool runEnabled = (REMOTE_START == 0);
 
-static enum 
-{ 
+enum behavior_t 
+{
   ESCAPE = 0,     // emergency bumping into things or way too close. Always gets priority.
   AVOID = 1,      // CRUISE selected, moves to best open space when it gets too close to obstacle.
   WALLFOLLOW = 2, // follow a wall.
-  CRUISE = 3      // default operating when nothing else is running - move straight.
-} defaultBehavior = CRUISE, runBehavior = CRUISE;
+  CRUISE = 3,     // default operating when nothing else is running - move straight.
+  UNDEFINED = 4   // no behavior defined
+};
+
+behavior_t defaultBehavior = CRUISE;
+behavior_t runBehavior = defaultBehavior;
+behavior_t prevBehavior = UNDEFINED;
 
 // ------------------------------------
 // Global Variables
@@ -99,10 +108,11 @@ MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);  // ... reverse (opposite
 
 MD_SmartCar2 Car(&ML, &MR);                     // SmartCar2 control object
 AltSoftSerial BTSerial(PIN_BT_RX, PIN_BT_TX);   // BT comms link
+cBuzzer Buzzer(PIN_BUZZER);
 
 // ------------------------------------
-// Sonar scanning groups
-// These are bit masks that define related sets of sonar scanning positions in
+// Scan scanning groups
+// These are bit masks that define related sets of scan scanning positions in
 // different related sets that we may want to use.
 //
 const uint8_t SCAN_MID = (_BV(cSensors::SL) | _BV(cSensors::SC) | _BV(cSensors::SR));
@@ -110,6 +120,7 @@ const uint8_t SCAN_CTR = _BV(cSensors::SC);
 const uint8_t SCAN_LEFT  = (_BV(cSensors::SLL) | _BV(cSensors::SL) | _BV(cSensors::SC));
 const uint8_t SCAN_RIGHT = (_BV(cSensors::SC) | _BV(cSensors::SR) | _BV(cSensors::SRR));
 const uint8_t SCAN_ALL = (SCAN_LEFT | SCAN_MID | SCAN_RIGHT);
+const uint8_t SCAN_WALL = (_BV(cSensors::SLL) | _BV(cSensors::SC));
 
 // ------------------------------------
 // Bump switch sensing
@@ -127,14 +138,41 @@ const uint8_t BUMP_BACK = _BV(cSensors::BL) | _BV(cSensors::BC) | _BV(cSensors::
 // If debug is turned on this is switched to the Serial Monitor.
 //
 
+bool checkHealth(void)
+// Check the health of the system and return true if all ok
+{
+  bool b = true;
+
+  if (Sensors.getVoltage() < V_ALARM)
+  {
+    TEL_MESG("\nALARM: Battery LOW");
+    DEBUG("\nV Check: ", Sensors.getVoltage());
+    b = false;
+  }
+
+  if (!b) Buzzer.setMode(cBuzzer::ALARM);
+
+  return(b);
+}
+
+void stopVehicle(void)
+// stop the vehicle and keep the buzzer working in current mode
+{
+  Car.stop();
+  Sensors.setScanMask(SCAN_CTR);
+  runBehavior = defaultBehavior;
+  runEnabled = false;
+  TEL_MESG("\n>> STOP <<");
+}
+
 void handlerM(char* param)
 // Change running mode
 {
   DEBUGS("Mode ");
   switch (*param)
   {
-  case '1': runBehavior = WALLFOLLOW;              DEBUGS("WALL\n");   break;
-  default:  runBehavior = CRUISE;                  DEBUGS("CRUISE\n"); break;
+  case '1': runBehavior = WALLFOLLOW; DEBUGS("WALL\n");   break;
+  default:  runBehavior = CRUISE;     DEBUGS("CRUISE\n"); break;
   }
 
   defaultBehavior = runBehavior;    // set the default so we remember
@@ -145,18 +183,30 @@ void handlerR(char* param)
 { 
   runEnabled = (*param == '1'); 
   DEBUG("Run ", runEnabled);  DEBUGS("\n");
+
   if (runEnabled)
   {
-    Car.setLinearVelocity(SPEED_CRUISE);
-    TEL_MESG("\n>> RUN <<");
+    if (checkHealth())
+    {
+      Buzzer.setMode(cBuzzer::HEARTBEAT);
+      Car.setLinearVelocity(SPEED_CRUISE);
+      TEL_MESG("\n>> RUN <<");
+    }
+    else
+      stopVehicle();
   }
   else
   {
-    Car.stop();
-    Sensors.setSonarMask(SCAN_CTR);
-    runBehavior = defaultBehavior;
-    TEL_MESG("\n>> STOP <<");
+    stopVehicle();
+    Buzzer.setMode(cBuzzer::SILENT);
   }
+}
+
+void handlerZ(char* param)
+// Sound on or off
+{
+  Buzzer.enable(*param == '1');
+  DEBUG("Sound ", *param);  DEBUGS("\n");
 }
 
 void handlerS(char* param)
@@ -164,8 +214,8 @@ void handlerS(char* param)
 {
   bool enabled = (*param == '1');
 
-  DEBUG("Sonar ", enabled);  DEBUGS("\n");
-  Sensors.enableSonar(enabled);
+  DEBUG("Scan ", enabled);  DEBUGS("\n");
+  Sensors.enableScan(enabled);
 }
 
 void handlerH(char* param);   // prototype for cmdTable
@@ -174,8 +224,9 @@ const MD_cmdProcessor::cmdItem_t PROGMEM cmdTable[] =
 {
   { "?", handlerH,  "", "Help text", 1 },
   { "r", handlerR, "b", "Run 0=stop, 1=start", 1 },
-  { "m", handlerM, "m", "Mode 0=Cruise, 1=Wall, 2=Light, 3=Dark", 1 },
-  { "s", handlerS, "b", "Sonar 0=disable, 1=enable" },
+  { "m", handlerM, "m", "Mode 0=Cruise, 1=Wall", 1 },
+  { "s", handlerS, "b", "Scan 0=disable, 1=enable" },
+  { "z", handlerZ, "b", "Sound 0=disable, 1=enable"}
 };
 
 MD_cmdProcessor CP(CMDStream, cmdTable, ARRAY_SIZE(cmdTable), true);
@@ -242,16 +293,19 @@ void sendTelemetryData(bool newData = false)
 // | 01| D     | Default Behavior (0-1) for CRUISE, WALLFOLLOW
 // | 02| C     | Current Behavior (0-3) for CRUISE, WALLFOLLOW, AVOID, ESCAPE
 // | 03| VVVV  | Linear velocity % FS (signed)
-// | 07| AAAAA | Angular velocity in radians (3.2 float signed)
+// | 07| AA.AA | Angular velocity in radians (3.2 float signed)
 // | 12| BBB   | Bumper bitfield (decimal No) MSB [FLL|FL|FC|FR|FRR|BL|BC|BR] LSB
-// | 15| FLL   | Sonar FLL distance (cm)
-// | 18| FL_   | Sonar FL distance (cm)
-// | 21| FC_   | Sonar FC distance (cm)
-// | 24| FR_   | Sonar FR distance (cm)
-// | 27| FRR   | Sonar FRR distance (cm)
-// | 30| S     | Packet Sequence number (0-9)
-// | 31|       | End of packet
+// | 15| FLL   | Scan FLL distance (cm)
+// | 18| FL_   | Scan FL distance (cm)
+// | 21| FC_   | Scan FC distance (cm)
+// | 24| FR_   | Scan FR distance (cm)
+// | 27| FRR   | Scan FRR distance (cm)
+// | 30| BB.B  | Battery Voltage (Volts)
+// | 34| S     | Packet Sequence number (0-9)
+// | 35|       | End of packet
 //
+// NOTE: Any or additionas need to be reflected in the initializing 
+// template in the declaration of the string below.
 {
 #if ENABLE_TELEMETRY
   static uint32_t timeLast = 0;
@@ -259,7 +313,7 @@ void sendTelemetryData(bool newData = false)
 
   if (newData || (millis() - timeLast >= TELEMETRY_PERIOD))
   {
-    static char mesg[] = { "SRDCVVVVAAAAABBBFLLFL_FC_FR_FRR" };
+    static char mesg[] = { "RDCVVVVAA.AABBBFLLFL_FC_FR_FRRBB.BS" };
     char *p = mesg;
 
     // Running modes
@@ -288,11 +342,13 @@ void sendTelemetryData(bool newData = false)
     // Sensor Data
     p += num2ASCII(p, Sensors.getBumperAll(), 3);
 
-    p += num2ASCII(p, Sensors.getSonar(cSensors::SLL), 3);
-    p += num2ASCII(p, Sensors.getSonar(cSensors::SL), 3);
-    p += num2ASCII(p, Sensors.getSonar(cSensors::SC), 3);
-    p += num2ASCII(p, Sensors.getSonar(cSensors::SR), 3);
-    p += num2ASCII(p, Sensors.getSonar(cSensors::SRR), 3);
+    p += num2ASCII(p, Sensors.getScan(cSensors::SLL), 3);
+    p += num2ASCII(p, Sensors.getScan(cSensors::SL), 3);
+    p += num2ASCII(p, Sensors.getScan(cSensors::SC), 3);
+    p += num2ASCII(p, Sensors.getScan(cSensors::SR), 3);
+    p += num2ASCII(p, Sensors.getScan(cSensors::SRR), 3);
+
+    p += float2ASCII(p, Sensors.getVoltage(), 4, 1);
 
     // Sequence number
     p += num2ASCII(p, seqNo, 1);
@@ -333,14 +389,15 @@ bool activateEscape(void)
   
   b = b || (runBehavior == ESCAPE);                       // currently dominant ...
   b = b || ((Sensors.getBumperAll() & BUMP_FRONT) != 0);  // ... or any front bumper triggered ...
-  b = b || Sensors.getSonar(cSensors::SC) < DIST_IMPACT;  // ... or too close on sonar
+  b = b || Sensors.getScan(cSensors::SC) < DIST_IMPACT;  // ... or too close on scan
 
   return(b);
 }
 
 void doEscape(bool restart)
 // Escapes danger
-// Backs away, turns to and resumes default behavior.
+// Implements an augmented algorithm based on the method described at
+// http://schursastrophotography.com/robotics/bumperlogic.html
 {
   // If MAX_EVENT escapes occur within EVENT_SPAN_TIME seconds, then we consider that
   // we are entrapped in a corner and may be 'canyoning'.
@@ -368,6 +425,7 @@ void doEscape(bool restart)
   if (restart)
   {
     runBehavior = ESCAPE;
+    Sensors.setScanPeriod(SCAN_FAST_POLL);
     mode = IDLE;
 
     // shuffle the event time in the array and later add the time 
@@ -379,11 +437,11 @@ void doEscape(bool restart)
   switch (mode)
   {
   case IDLE:   // just hit something, so back up and look around 
-    TEL_MESG("\nESCAPE start");
+    TEL_MESG("\nESCAPE");
     bumperHit = Sensors.getBumperAll();   // save for later analysis
 
-    // if we are detecting 'too close' by sonar, make it look like a front bumper hit
-    if (Sensors.getSonar(cSensors::SC) < DIST_IMPACT)
+    // if we are detecting 'too close' by scan, make it look like a front bumper hit
+    if (Sensors.getScan(cSensors::SC) < DIST_IMPACT)
       bumperHit |= _BV(cSensors::FC);
 
     // set up the next event recording
@@ -393,8 +451,8 @@ void doEscape(bool restart)
     else timeEvent[MAX_EVENT - 1].type = BUMP_MID;
 
     // start scanning all around us while we are reversing
-    Sensors.setSonarMask(SCAN_ALL);
-    timeToScan = Sensors.getSonarScanTime();
+    Sensors.setScanMask(SCAN_ALL);
+    timeToScan = Sensors.getSweepTime();
 
     // now move back
     Car.setLinearVelocity(SPEED_MOVE);
@@ -431,85 +489,93 @@ void doEscape(bool restart)
     break;
 
   case DECIDE:
-    // first up, wait for the sonar data collection time to finish (if not already)
+    // first up, give the scan data collection time to finish (if not already)
     // so that we have all the data for distances around us.
-    if (Sensors.isSonarEnabled() && (millis() - timeMark < timeToScan))
+    if (Sensors.isScanEnabled() && (millis() - timeMark < timeToScan))
       break;
 
-    Sensors.setSonarMask(0);  // stop the full sonar scan
-
     // From here backup sequence is now complete and we should have sensed 
-    // all distances (if enabled), so based on how we originally hit the obstacle
-    // work out the turning amount to get out of this.
-    // The sequence of checks gives the minimum amount of turn priority over more
-    // drastic turns.
+    // all distances (if sensor enabled), so based on how we originally hit 
+    // the obstacle work out the turning amount to get out of this.
     
-    // if the edge sensor on far side was bumped, veer gently away from the bumped side
-    if ((bumperHit & (1 << cSensors::FLL)) || (bumperHit & (1 << cSensors::FRR)))
-    {
-      // Front LL or RR sensor is bumped
-      TEL_MESG(" FLL/RR");
-      pctRotate = 4 + random(4);      // 4% (11 degrees) + random amount up to 7% (22 degrees)
-    }
-    // if the middle sensor either side was bumped, veer away from the bumped side
-    else if ((bumperHit & (1 << cSensors::FL)) || (bumperHit & (1 << cSensors::FR)))
-    {
-      // Front L or R sensor is bumped
-      TEL_MESG(" FL/R");
-      pctRotate = 7 + random(7);      // 7% (22 degrees) + random amount up to 12% (45 degrees)
-    }
-    else if (bumperHit & (1 << cSensors::FC))
+    // check if we hit the FC bumper as this is an important event
+    if (bumperHit & (1 << cSensors::FC))
     {
       TEL_MESG(" FC");
-      pctRotate = 13 + random(13);      // 13% (45 degrees) + random amount up to 25% (90 degrees)
+      pctRotate = 13 + random(13);      // 13% turn (45 degrees) + random amount up to 25% (90 degrees)
 
-      // Now we are set up for a right turn, so check if we need to change this
-      // to a left one (change sign for turn percentage).
+      // Now check if we need to change this to a left turn
+      // based on historical bump sequences.
 
       // if we hit center the last time as well, make it a always left turn
-      // if we don't have sonar to go by (later)
-      if (!Sensors.isSonarEnabled() && timeEvent[MAX_EVENT - 2].type == BUMP_MID)
+      // if we don't have scan to go by (checked later)
+      if (!Sensors.isScanEnabled() && timeEvent[MAX_EVENT - 2].type == BUMP_MID)
       {
-        TEL_MESG(" ^");
+        TEL_MESG(" C=");
         pctRotate = -pctRotate;
       }
-      // if last 2 bumps were right side, now bumped center, so rotate left
-      else if (timeEvent[MAX_EVENT - 2].type == timeEvent[MAX_EVENT - 3].type 
-            && timeEvent[MAX_EVENT - 2].type != BUMP_MID)
+      // previous 2 bumps were right side, now bumped center, so rotate left
+      else if (timeEvent[MAX_EVENT - 2].type == timeEvent[MAX_EVENT - 3].type
+        && timeEvent[MAX_EVENT - 2].type != BUMP_MID)
       {
-        TEL_MESG(" @");
+        TEL_MESG(" 2=");
         if (timeEvent[MAX_EVENT - 2].type == BUMP_RIGHT)
           pctRotate = -pctRotate;
       }
-      else if (Sensors.getSonar(cSensors::SL) > Sensors.getSonar(cSensors::SR))
+      else if (Sensors.getScan(cSensors::SL) > Sensors.getScan(cSensors::SR))
       {
         TEL_MESG(" >");
         // no pattern to the bumps, so pick the side with the most space to move
         pctRotate = -pctRotate;
       }
-      else if (Sensors.getSonar(cSensors::SL) == Sensors.getSonar(cSensors::SR))
+      else if (Sensors.getScan(cSensors::SL) == Sensors.getScan(cSensors::SR))
       {
-        TEL_MESG(" !");
+        TEL_MESG(" RA");
         // randomly select whether to change to left rotation
         if (random(100) > 50) pctRotate = -pctRotate;
       }
     }
     else
     {
-      // All that is left are the back bumpers...
+      // Sequence of side impact checks gives minimum amount of turn priority 
+      // over more drastic turns. Also it just assume +ve turn (right) and
+      // we'll adjust that later if needed.
+
+      // if the edge sensor on far side was bumped, veer gently away from the bumped side
+      if ((bumperHit & (1 << cSensors::FLL)) || (bumperHit & (1 << cSensors::FRR)))
+      {
+        // Front LL or RR sensor is bumped
+        TEL_MESG(" FLL/RR");
+        pctRotate = 4 + random(4);      // 4% (11 degrees) + random amount up to 7% (22 degrees)
+      }
+      // if the middle sensor either side was bumped, veer away from the bumped side
+      else if ((bumperHit & (1 << cSensors::FL)) || (bumperHit & (1 << cSensors::FR)))
+      {
+        // Front L or R sensor is bumped
+        TEL_MESG(" FL/R");
+        pctRotate = 7 + random(7);      // 7% (22 degrees) + random amount up to 12% (45 degrees)
+      }
+
+      // if we are hit anywhere on the right hand side, we need to steer left instead
+      if (bumperHit & BUMP_RIGHT) pctRotate = -pctRotate;
+    }
+    
+    // All that is left are the back bumpers...
+    // if we are hit anywhere on the back, this is unusual so do 
+    // something creative and override any of the logic above
+    if (bumperHit & BUMP_BACK)
+    {
       TEL_MESG(" BL/C/R");
       pctRotate = 25 - random(50);     // head somewhere randomly (+/- 25% or 90 degrees)    
     }
 
-    // if we are hit anywhere on the right hand side, we need to veer left
-    if (bumperHit & BUMP_RIGHT) pctRotate = -pctRotate;
-    
     // display telemetry info on decision
-    if (pctRotate < 0)   TEL_MESG(" L ");
-    else if (pctRotate > 0) TEL_MESG(" R ");
-    TEL_VALUE("%", pctRotate);
+    if (pctRotate < 0) TEL_MESG(" L");
+    else if (pctRotate > 0) TEL_MESG(" R");
+    TEL_VALUE(" %", pctRotate);
 
     // now actually tell the car to move
+    Sensors.setScanMask(0);  // stop the scan scan
     Car.setLinearVelocity(SPEED_MOVE);
     Car.spin(pctRotate);
     mode = SPIN;
@@ -519,7 +585,7 @@ void doEscape(bool restart)
     // we have had too little time between MAX_EVENTS, so turn around and do
     // something different to avoid being stuck here forever.
     TEL_MESG(" BAIL");
-    timeEvent[1].time = 0;     // clear this so we skip the next impact as a potential entrapment situation
+    timeEvent[1].time = 0;     // clear this so we skip the next impact being detected as an entrapment
     Car.setLinearVelocity(SPEED_MOVE);
     Car.spin(50);         // turn 50% revolution (180 degrees)
     mode = SPIN;
@@ -542,7 +608,7 @@ bool activateAvoid(void)
   bool b = false;
 
   b = b || (runBehavior == AVOID);         // currently dominant
-  b = b || Sensors.getSonar(cSensors::SC) < DIST_OBSTACLE;  // within range of obstruction
+  b = b || Sensors.getScan(cSensors::SC) < DIST_OBSTACLE;  // within range of obstruction
   b = b && (defaultBehavior == CRUISE);    // but only if this is the selected overall behavior
 
   return(b);
@@ -550,19 +616,16 @@ bool activateAvoid(void)
 
 void doAvoid(bool restart)
 // Avoids collision when in cruise mode.
-// This veers in the direction of the most free space, 
-// more veer with closer distance to obstacle.
+// This veers in the direction of the most free space, with proportionately
+// more rotation the closer vehicle is to the obstacle.
 {
-  // When we need to avoid, the maximum angle that we want 
-  // to veer away is AVOID_ANGLE radians/sec (2*PI = 1 rotation)
-  const float AVOID_ANGLE = PI / 4;
-
   static uint16_t timeToScan;         // time to scan around
   static enum { IDLE, DECIDE, WAIT } mode = IDLE;
   static uint32_t timeMark;           // millis timer mark
 
   if (restart)
   {
+    Sensors.setScanPeriod(SCAN_FAST_POLL);
     runBehavior = AVOID;
     mode = IDLE;
   }
@@ -570,40 +633,61 @@ void doAvoid(bool restart)
   switch (mode)
   {
   case IDLE:      // too close to something, start avoidance moves
-    TEL_MESG("\nAVOID start");
+    TEL_MESG("\nAVOID");
 
-    // start scanning at front for an escape route
-    Sensors.setSonarMask(SCAN_MID);
-    timeToScan = Sensors.getSonarScanTime();  // how long the scan will take
-    Car.setLinearVelocity(SPEED_CRAWL);       // slow right down while scanning
+    // start scanning at front 3 positions for an escape route
+    Sensors.setScanMask(SCAN_MID);
+    timeToScan = Sensors.getSweepTime();  // how long the scan will take
+    Car.setLinearVelocity(SPEED_CRAWL);   // slow right down while scanning
     timeMark = millis();
     mode = DECIDE;
     break;
 
   case DECIDE:    // decide how which direction to veer away
     {
+      // When we need to avoid, the maximum angle to veer 
+      // away is AVOID_ANGLE_MAX radians/sec (2*PI = 1 rotation)
+      const float AVOID_ANGLE_MAX = PI / 2;
+
       // wait for a scan cycle to complete
       if (millis() - timeMark < timeToScan)
         break;
+
+      float turn = 0.0;   // this MAY be changed below
+
+      // get current set of readings
+      uint8_t L = Sensors.getScan(cSensors::SL);
+      uint8_t C = Sensors.getScan(cSensors::SC);
+      uint8_t R = Sensors.getScan(cSensors::SR);
+      Sensors.setScanMask(0);        // stop active scanning
+
+      //TEL_VALUE(" C ", C);
+      //TEL_VALUE(" L ", L);
+      //TEL_VALUE(" R ", R);
 
       // how much to turn? 
       // work out angle inverse to distance from obstacle and keep it 
       // to a max AVOID_ANGLE /sec rotation (ie, less turn further out, 
       // more turn closer to obstacle)
-      float turn = (1.0 - ((float)Sensors.getSonar(cSensors::SC) / (float)DIST_OBSTACLE)) * AVOID_ANGLE;
+      timeMark = 0;
+      if (DIST_OBSTACLE > C)
+      {
+        turn = (float)C / (float)DIST_OBSTACLE;
+        turn = (1.0 - turn) * AVOID_ANGLE_MAX;    // complementary proportional
 
-      Sensors.setSonarMask(0); // stop active scanning
+        // which way to turn? Default is R (+) but change to L (-) if there 
+        // is more space that side
+        if (L > R) turn = -turn;
 
-      // which way to turn? Default is R (+) but change
-      // to L (-) if there is more space that side
-      if (Sensors.getSonar(cSensors::SL) > Sensors.getSonar(cSensors::SR))
-        turn = -turn;
-      if (turn < 0) TEL_MESG(": L"); else TEL_MESG(": R");
-      TEL_VALUE(" ", turn);
+        TEL_MESG(" turn ");
+        if (turn > 0) TEL_VALUE("R ", turn);
+        else          TEL_VALUE("L ", -turn);
 
-      // Set the path to avoid obstacle
+        timeMark = millis();      // set wait threshold
+      }
+
+      // finally, set the path to avoid obstacle
       Car.drive(SPEED_CRUISE, turn);
-      timeMark = millis();
       mode = WAIT;
     }
     break;
@@ -611,7 +695,7 @@ void doAvoid(bool restart)
   case WAIT:    // wait for the avoid sequence to complete
     if (millis() - timeMark >= AVOID_ACTIVE_TIME)
     {
-      TEL_MESG(": end");
+      TEL_MESG(" :end");
       runBehavior = defaultBehavior;
       mode = IDLE;
     }
@@ -624,54 +708,152 @@ bool activateWallFollow(void)
 {
   bool b = false;
 
-  // CURRENTLY NOT IMPLEMENTED
-  //b = b || (runBehavior == WALLFOLLOW);      // currently dominant
-  //b = b && (defaultBehavior == WALLFOLLOW);  // but only if this is the selected behavior 
+  b = b || (Sensors.isScanEnabled());       // we need scan to run this!
+  b = b && (defaultBehavior == WALLFOLLOW);  // but only if this is the selected behavior 
 
   return(b);
 }
 
 void doWallFollow(bool restart)
 // Follows wall at set distance
+// Implements and augmented algorithm based on "Virtual Triangle Wall Follower"
+// at http://faculty.salina.k-state.edu/tim/robot_prog/MobileBot/Algorithms/WallFollow.html
 {
-  static MD_SmartCar2::actionItem_t seqFollow[] =
-  {
-    { MD_SmartCar2::DRIVE, SPEED_CRUISE, 0 },       // angular filled in at run time
-    { MD_SmartCar2::PAUSE, FOLLOW_ACTIVE_TIME }, // drive curved for a short time
-    { MD_SmartCar2::END }
-  };
+  static uint16_t timeToScan;       // time to scan around
+  static enum { IDLE, ACQ_FIRST, ACQ_NEXT, DELAY } mode = IDLE;
+  static uint32_t timeMark;         // millis timer mark
+  static float x, y[2];             // x and y coordinates for calcs
+
+  // decision outcome variable for setting the trajectory
+  uint8_t velocity = SPEED_MAX;     // may be changed if a decision made
+  float turn = 0;                   // may be changed if a decition is made
 
   if (restart)
   {
     runBehavior = WALLFOLLOW;
-
-    TEL_MESG("\nFOLLOW start");
-    Car.startSequence(seqFollow);
+    mode = IDLE;
   }
-  else if (Car.isSequenceComplete())
+
+  switch(mode)
   {
-    TEL_MESG(": end");
-    runBehavior = defaultBehavior;
+  case IDLE:        // set it up for following
+    TEL_MESG("\nFOLLOW start");
+
+    Car.drive(velocity);
+
+    // start scanning at front and left
+    Sensors.setScanMask(SCAN_WALL);
+    Sensors.setScanPeriod(SCAN_WALL_POLL);
+    timeToScan = Sensors.getSweepTime();  // how long the scan will take
+    timeMark = millis();
+    mode = ACQ_FIRST;
+    break;
+
+  case ACQ_FIRST:   // Acquire the first data point for calculations
+    // wait for a scan cycle to complete
+    if (millis() - timeMark < timeToScan)
+      break;
+
+    // set the first point for the calculations
+    y[1] = Sensors.getScan(cSensors::SLL);
+    timeMark = millis();
+    mode = ACQ_NEXT;
+    break;
+
+  case ACQ_NEXT:    // Acquire the next data point for calculations
+    // wait for a scan cycle to complete
+    if (millis() - timeMark < timeToScan)
+      break;
+    timeMark = millis();
+
+    // Now decide which direction to steer
+    // First check if we have an object in front of us. If so we need to
+    // turn to the right (+ angle) as we are following wall on the left
+    if (Sensors.getScan(cSensors::SC) <= DIST_WALLFOLLOW)
+    {
+      TEL_MESG("\nBLOCK ");
+      turn = PI / 4;
+      velocity = SPEED_MOVE;
+    } 
+    else
+    {
+      // Run the algorithm ...
+
+      // This is a tunable constant to adjust the gain of the controller. It 
+      // should be increased if the vehicle turns too agressively and decreased 
+      // if too sluggish.
+      const uint16_t WALL_LEAD = 50;   // in cm
+          
+      // distance = speed * time (in mm) convert to cm
+      x = ((PPS_MAX * Car.getLinearVelocity()) / 100.0) * Car.getDistancePerPulse();  // speed in mm/s
+      x *= ((float)timeToScan / 1000.0);  // distance in mm
+      x /= 10.0;    // convert to cm
+
+      y[0] = y[1];  // shuffle the values along
+      y[1] = Sensors.getScan(cSensors::SLL);   // get new value
+
+      // How much to steer? 
+      // Do the algorithm calculation to work out our angle towards the wall
+      // and then how much we need to turn in the next timeToScan period
+      turn = atan2(y[1] - DIST_WALLFOLLOW, x + WALL_LEAD - y[0]);
+
+      //DEBUG("\nx=", x);
+      //DEBUG(" y1=", y[1]);
+      //DEBUG(" angle=", angle);
+
+      // The library needs an angular velocity (rad/s) to bring the LH 
+      // side of the vehicle closer to DIST_WALLFOLLOW from the wall. 
+      // Assume the angle calculated will be turned in 1 second, so this 
+      // becomes the turning rate. Also adjust the direction from calcs 
+      // to conform to library standards.
+      turn = -turn; 
+    }
+
+    // Now enact the decisions made
+    if (Car.getLinearVelocity() != velocity || Car.getAngularVelocity() != turn)
+    {
+      TEL_VALUE("\nFOLLOW LL:", Sensors.getScan(cSensors::SLL));
+      TEL_MESG(" adj");
+      //if (turn < 0) TEL_MESG(" L");
+      //if (turn > 0) TEL_MESG(" R");
+      TEL_VALUE(" r", turn);
+      Car.drive(velocity, turn);  // set the path for wall distance
+    }
+    timeMark = millis();
+
+    // only use the delay state if the scan time is faster that 1 s
+    if (timeToScan < 1000)
+      mode = DELAY;
+    break;
+
+  case DELAY:
+    if (millis() - timeMark >= (1000 - timeToScan))
+    {
+      timeMark = millis();
+      mode = ACQ_NEXT;
+    }
+    break;
   }
 }
 
-bool doCruise(bool restart)
+void doCruise(bool restart)
 // Default is to just drive in a straight line
 // We only get here when all other behaviors are not applicable.
 {
   if (restart)
   {
-    TEL_MESG("\nCRUISE start");
-    Sensors.setSonarMask(0);
+    TEL_MESG("\nCRUISE");
+    Sensors.setScanPeriod(SCAN_SLOW_POLL);
+    Sensors.setScanMask(SCAN_CTR);
     Car.drive(SPEED_CRUISE);
   }
   else
   {
-    uint8_t v = Sensors.getSonar(cSensors::SC) >= DIST_CLEAR ? SPEED_MAX : SPEED_CRUISE;
+    uint8_t v = Sensors.getScan(cSensors::SC) >= DIST_CLEAR ? SPEED_MAX : SPEED_CRUISE;
 
     if (Car.getLinearVelocity() != v)
     {
-      DEBUG("\nCRUISE sensor ", Sensors.getSonar(cSensors::SC));
+      DEBUG("\nCRUISE sensor ", Sensors.getScan(cSensors::SC));
       DEBUG(" speed ", v);
       Car.drive(v);
     }
@@ -688,8 +870,6 @@ bool doCruise(bool restart)
     }
 #endif
   }
-
-  return(false);
 }
 
 void setup(void)
@@ -701,33 +881,50 @@ void setup(void)
   BTSerial.begin(BT_BAUDRATE);
 
   CP.begin();
+  Buzzer.begin();
   Sensors.begin();
+
   if (!Car.begin(PPR, PPS_MAX, DIA_WHEEL, LEN_BASE))   // take all the defaults
     TEL_MESG("\nUnable to start car!!\n");
-  Car.setLinearVelocity(0);    // something as a default
+  Car.setLinearVelocity(0);    // vehicle is stopped
 }
 
 void loop(void)
 {
+  static uint32_t timerHealth;
   static bool restart = true;
 
+  // ----------------------
   // Always run these background tasks
   CP.run();         // Command processor from BT or Serial Monitor
   Car.run();        // Car functions
+  Buzzer.run();     // Buzzer functions
+  Sensors.read();   // Read sensor data
+  sendTelemetryData(Sensors.isUpdated() && runEnabled); // telemetry if changed or on internal timer when run not enabled
+  // ----------------------
 
-  // Read sensors and output as appropriate
-  Sensors.read();   // read sensors
 #if DUMP_SENSORS
   if (Sensors.isUpdated()) Sensors.dump(CMDStream);     // debug dump
 #endif
-  sendTelemetryData(Sensors.isUpdated() && runEnabled); // telemetry if changed or on internal timer when run not enabled
 
-  // If the global running flag is on arbitrate behaviors in priority order
   if (runEnabled)
   {
-    if (activateEscape()) { restart = true; doEscape(runBehavior != ESCAPE); }
-    else if (activateAvoid()) { restart = true; doAvoid(runBehavior != AVOID); }
-    else if (activateWallFollow()) { restart = true; doWallFollow(runBehavior != WALLFOLLOW); }
-    else { restart = doCruise(restart); }    // default choice
+    // check health status every HEALTHCHECK_PERIOD
+    if (millis() - timerHealth >= HEALTHCHECK_PERIOD)
+    {
+      if (!checkHealth()) stopVehicle();
+      timerHealth = millis();
+    }
+
+    // Arbitrate behaviors in priority order
+    if      (activateEscape())     { doEscape(runBehavior != ESCAPE); }
+    else if (activateAvoid())      { doAvoid(runBehavior != AVOID); }
+    else if (activateWallFollow()) { doWallFollow(restart); }
+    else                           { doCruise(restart); }    // default choice
+
+    // if the curreent behavior has changed, this
+    // signals a restart for the next behavior
+    restart = (runBehavior != prevBehavior);
+    prevBehavior = runBehavior;   // save this for next time
   }
 }

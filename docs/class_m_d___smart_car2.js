@@ -17,6 +17,7 @@ var class_m_d___smart_car2 =
     [ "drive", "class_m_d___smart_car2.html#a8cca70ece0943c53b8521b5ab3c30f17", null ],
     [ "drive", "class_m_d___smart_car2.html#aed9e678763a6d67baa0a160685f09972", null ],
     [ "getAngularVelocity", "class_m_d___smart_car2.html#a30ac2b3876c3d55da79c64ce7910f7cd", null ],
+    [ "getDistancePerPulse", "class_m_d___smart_car2.html#a67ffa7a980cbbd8135a987c6ed495098", null ],
     [ "getLinearVelocity", "class_m_d___smart_car2.html#aa57b905373b62ae0339fdb288f9607de", null ],
     [ "getPulsePerRev", "class_m_d___smart_car2.html#a3728425d5049c6cf1a182565d89a1775", null ],
     [ "isRunning", "class_m_d___smart_car2.html#ad129dd6dc0064d3397cef4d7af75de49", null ],
@@ -35,7 +36,7 @@ var class_m_d___smart_car2 =
     [ "spin", "class_m_d___smart_car2.html#ae36cb200b21fdb33a038a222f240ab72", null ],
     [ "startSequence", "class_m_d___smart_car2.html#a64d40a89a5d7943b7164cc7201e2f9a6", null ],
     [ "startSequence", "class_m_d___smart_car2.html#ad3129dd5af2c9ab5c14b00cb2782ccd2", null ],
-    [ "stop", "class_m_d___smart_car2.html#a92243132842fdb8b55e1559146ee5d24", null ],
-    [ "cp", "class_m_d___smart_car2.html#a347776faa92671f221cb710f86449cf9", null ],
+    [ "stop", "class_m_d___smart_car2.html#a72d7be3b2b5d62e04b703f3af7433b6b", null ],
+    [ "stopSequence", "class_m_d___smart_car2.html#a904d8a1c51bbe407d373399fd98270f8", null ],
     [ "MAX_MOTOR", "class_m_d___smart_car2.html#a4c39f7e3719521bcc751f19fb1c8a8a4", null ]
 ];

@@ -7,10 +7,11 @@ var searchData=
   ['setlinearvelocity_4',['setLinearVelocity',['../class_m_d___smart_car2.html#a84590b4fd74ef3487ae95262379faf16',1,'MD_SmartCar2']]],
   ['setting_20up_20a_20new_20smartcar2_5',['Setting up a new SmartCar2',['../page_using_library.html',1,'index']]],
   ['setvehicleparameters_6',['setVehicleParameters',['../class_m_d___smart_car2.html#a0e146ca09364c03b15d2bf67f6993f9f',1,'MD_SmartCar2']]],
-  ['spin_7',['SPIN',['../class_m_d___smart_car2.html#afda2911c50e97b360ef9d330e82d4645a0bce7dc96cb56b2d53bf0483b92423c3',1,'MD_SmartCar2']]],
-  ['spin_8',['spin',['../class_m_d___smart_car2.html#ae36cb200b21fdb33a038a222f240ab72',1,'MD_SmartCar2']]],
+  ['spin_7',['spin',['../class_m_d___smart_car2.html#ae36cb200b21fdb33a038a222f240ab72',1,'MD_SmartCar2']]],
+  ['spin_8',['SPIN',['../class_m_d___smart_car2.html#afda2911c50e97b360ef9d330e82d4645a0bce7dc96cb56b2d53bf0483b92423c3',1,'MD_SmartCar2']]],
   ['startsequence_9',['startSequence',['../class_m_d___smart_car2.html#ad3129dd5af2c9ab5c14b00cb2782ccd2',1,'MD_SmartCar2::startSequence(const actionItem_t *actionList)'],['../class_m_d___smart_car2.html#a64d40a89a5d7943b7164cc7201e2f9a6',1,'MD_SmartCar2::startSequence(actionItem_t *actionList)']]],
-  ['stop_10',['STOP',['../class_m_d___smart_car2.html#afda2911c50e97b360ef9d330e82d4645a18aa6984f203df97ec13183a3f62feb6',1,'MD_SmartCar2']]],
-  ['stop_11',['stop',['../class_m_d___smart_car2.html#a92243132842fdb8b55e1559146ee5d24',1,'MD_SmartCar2']]],
-  ['support_20the_20library_12',['Support the Library',['../page_donation.html',1,'index']]]
+  ['stop_10',['stop',['../class_m_d___smart_car2.html#a72d7be3b2b5d62e04b703f3af7433b6b',1,'MD_SmartCar2']]],
+  ['stop_11',['STOP',['../class_m_d___smart_car2.html#afda2911c50e97b360ef9d330e82d4645a18aa6984f203df97ec13183a3f62feb6',1,'MD_SmartCar2']]],
+  ['stopsequence_12',['stopSequence',['../class_m_d___smart_car2.html#a904d8a1c51bbe407d373399fd98270f8',1,'MD_SmartCar2']]],
+  ['support_20the_20library_13',['Support the Library',['../page_donation.html',1,'index']]]
 ];

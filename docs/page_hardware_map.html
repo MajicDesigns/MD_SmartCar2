@@ -112,28 +112,26 @@ $(document).ready(function(){initNavTree('page_hardware_map.html',''); initResiz
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">D9~   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone">D10~   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Default SPI SS    </td></tr>
+<td class="markdownTableBodyNone">D11~*   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI MOSI    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone">D11~*   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI MOSI    </td></tr>
+<td class="markdownTableBodyNone">D12*   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI MISO    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone">D12*   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI MISO    </td></tr>
+<td class="markdownTableBodyNone">D13*   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI SCK    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone">D13*   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Hardware SPI SCK    </td></tr>
-<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">A0   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare    </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">A1   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare    </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">A2   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare    </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">A3   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone">A4*   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Hardware I2C SDA    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone">A5*   </td><td class="markdownTableBodyLeft">R   </td><td class="markdownTableBodyLeft">Spare / Hardware I2C SCL    </td></tr>
+<td class="markdownTableBodyNone">A4*   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Hardware I2C SDA    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone">A6   </td><td class="markdownTableBodyLeft">A2   </td><td class="markdownTableBodyLeft">Spare / Nano Analog I/O only    </td></tr>
+<td class="markdownTableBodyNone">A5*   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Hardware I2C SCL    </td></tr>
 <tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">A6   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Nano Analog I/O only    </td></tr>
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">A7   </td><td class="markdownTableBodyLeft">A   </td><td class="markdownTableBodyLeft">Spare / Nano Analog I/O only   </td></tr>
 </table>
 <p >(*) shared or comms bus pins, (~) hardware PWM pin, (!) external iRQ pin </p>
@@ -144,7 +142,7 @@ $(document).ready(function(){initNavTree('page_hardware_map.html',''); initResiz
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><a class="el" href="index.html">Robotic Vehicle Library</a></li>
-    <li class="footer">Generated on Mon Oct 4 2021 15:38:19 for Robotic Car Controller by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.2 </li>
+    <li class="footer">Generated on Mon Nov 15 2021 10:18:48 for Robotic Car Controller by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.2 </li>
   </ul>
 </div>
 </body>

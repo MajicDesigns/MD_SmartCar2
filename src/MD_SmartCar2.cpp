@@ -215,10 +215,9 @@ void MD_SmartCar2::run(void)
     runSequence();
 
   // loop through all the motors doing whatever in each state
-  for (uint8_t motor = 0; motor < MAX_MOTOR; motor++)   // right[1] side stops
-//  for (int8_t motor = MAX_MOTOR-1; motor >= 0; motor--) // left[0] side stops
+  for (uint8_t motor = 0; motor < MAX_MOTOR; motor++)
   {
-    // always let the motors do something
+    // let the motors do something (and then again at the end)
     _mData[motor].motor->run();
 
     // now deal with any changes to the current motor driving conditions
@@ -383,6 +382,9 @@ void MD_SmartCar2::run(void)
 
     default: _mData[motor].state = S_IDLE; break;
     }
+
+    // now let the motors do something again
+    _mData[motor].motor->run();
   }
 }
 
