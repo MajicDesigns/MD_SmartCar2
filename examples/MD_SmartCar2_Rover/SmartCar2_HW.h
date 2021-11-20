@@ -67,7 +67,8 @@ const uint8_t DIST_IMPACT = 20;     ///< impact imminent
 const uint8_t DIST_CLOSE = 30;      ///< really close 
 const uint8_t DIST_OBSTACLE = 45;   ///< far obstacle detected
 const uint8_t DIST_CLEAR = 80;      ///< distant object
-const uint8_t DIST_WALLFOLLOW = 30; ///< distance from wall (must be > DIST_IMPACT)
+const uint8_t DIST_WALLFOLLOW = DIST_IMPACT + 10;    ///< distance from wall (must be > DIST_IMPACT)
+const uint8_t DIST_WALLDETECT = 4 * DIST_WALLFOLLOW; ///< distance at which we detct a wall and move to it
 
 // ------------------------------------
 // Miscellaneous values

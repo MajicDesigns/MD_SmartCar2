@@ -7,17 +7,16 @@
 // External library dependencies are listed in the main application.
 //
 
-// Options for Scan sensors
-#define USE_HCSR04    1   // Ultrasonic ping sensor
-#define USE_VL53L0X   0   // Laser Time of Flight sesnor
+// Options for Scan sensors (only one enabled)
+#define USE_HCSR04    0   // Ultrasonic ping sensor
+#define USE_VL53L0X   1   // Laser Time of Flight sesnor
 
 #include <Wire.h>
 #include <ServoTimer2.h>
 #include <PCF8574.h>
 #if USE_HCSR04
 #include <NewPing.h>
-#endif
-#if USE_VL53L0X
+#elif USE_VL53L0X
 #include <VL53L0X.h>
 #endif
 #include "SmartCar2_HW.h"
@@ -34,12 +33,16 @@ public:
 
   cSensors(void) { }
 
-  void begin(void) 
+  bool begin(void) 
   {
+    bool b = true;
+
     Wire.begin();
-    beginBumper();
-    beginScan();
-    beginBattery();
+    b &= beginBumper();
+    b &= beginScan();
+    b &= beginBattery();
+
+    return(b);
   }
 
   void read(void) 
@@ -58,9 +61,9 @@ public:
   inline bool    getBumper(bumpDir_t dir) { return((_bumpers & _BV(dir)) != 0); } // return a specific bumper position
   inline uint8_t getBumperAll(void)       { return(_bumpers); }                   // return all bumper bits in the byte
 
-  inline void enableScan(bool b)        { _enableScan = b; resetScan(); }      // enable/disable the scan reading
-  inline void setScanPeriod(uint16_t s) { if (s >= SCAN_FAST_POLL) _scanPeriod = s; }  // set the new time
-  inline bool isScanEnabled(void)       { return (_enableScan); }               // return current status
+  inline void enableScan(bool b)        { _enableScan = b; resetScan(); }             // enable/disable the scan reading
+  inline void setScanPeriod(uint16_t s) { if (s >= SCAN_FAST_POLL) _scanPeriod = s; } // set the new time
+  inline bool isScanEnabled(void)       { return (_enableScan); }                     // return current status
   inline uint8_t getScan(scanDir_t dir) { return(_scanPoint[dir].data); }             // get a specific scan reading
 
   uint16_t getSweepTime(void)
@@ -122,13 +125,15 @@ private:
 
   //-------------------------------
   // Battery monitor definitions
-  float _volts;   // battery voltage in 1/0 volts
-  uint32_t _lastBatteryPoll;
+  float _volts;               // battery voltage in 1/0 volts
+  uint32_t _lastBatteryPoll;  // millis() marker for last poll
 
-  void beginBattery(void)
+  bool beginBattery(void)
   {
     pinMode(PIN_VOLTAGE, INPUT);
     readBattery(true);
+
+    return(true);
   }
 
   void readBattery(bool force = false)
@@ -148,15 +153,15 @@ private:
 
   //-------------------------------
   // Bumper definitions
-  uint8_t _bumpers;              // Bump switches (1 bit per switch)
   PCF8574 pcf = PCF8574(PCF8574_ADDR);
-  uint32_t _lastBumperPoll;
+  uint8_t _bumpers;         // Bump switches (1 bit per switch)
+  uint32_t _lastBumperPoll; // millis() marker for last poll
 
-  void beginBumper(void)
+  bool beginBumper(void)
   // initialize the bumper subsystem
   {
     _bumpers = 0;
-    pcf.begin();
+    return(pcf.begin());
   }
 
   void readBumper(void)
@@ -191,16 +196,16 @@ private:
     {   0, DIST_ALLCLEAR },   // SRR
   };
 
-  bool _enableScan;           // Scanning is enabled or not
-  uint8_t _curPoint;          // Current point being scanned
-  uint8_t _scanMask;          // mask for positions to include in the sweep
-  uint16_t _scanPeriod;       // time between scans
-  uint32_t _lastScanPoll;     // millis() time marker for last scan poll
+  bool _enableScan;             // Scanning is enabled or not
+  uint8_t _curPoint;            // Current point being scanned
+  uint8_t _scanMask;            // Mask for positions to include in the sweep
+  uint16_t _scanPeriod;         // Time between scans
+  uint32_t _lastScanPoll;       // millis() marker for last poll
+  const int8_t SERVO_ZERO = -7; // moveServo() adjustment to set servo zero as dead ahead
 
 #if USE_HCSR04
   NewPing _scan = NewPing(PIN_SCAN, PIN_SCAN, DIST_MAX);
-#endif
-#if USE_VL53L0X
+#elif USE_VL53L0X
   VL53L0X _scan;
 #endif
   ServoTimer2 _servo;
@@ -217,7 +222,7 @@ private:
       _scanPoint[i].data = DIST_ALLCLEAR;
   }
 
-  void beginScan(void)
+  bool beginScan(void)
   // initialize the scan subsystem
   {
     bool b = true;
@@ -229,6 +234,8 @@ private:
 #endif
     resetScan();
     enableScan(b);
+
+    return(b);
   }
 
   void moveServo(uint16_t pos)
@@ -239,7 +246,7 @@ private:
     else if (pos > 180) pos = 180;
 
     // convert to pulse width
-    pos = map(pos, 0, 180, MIN_PULSE_WIDTH, MAX_PULSE_WIDTH);
+    pos = map(pos + SERVO_ZERO, 0, 180, MIN_PULSE_WIDTH, MAX_PULSE_WIDTH);
     _servo.write(pos);
   }
 
@@ -258,9 +265,9 @@ private:
       uint16_t dist;
 #if USE_HCSR04
       dist = _scan.ping_cm();
-#endif
-#if USE_VL53L0X
+#elif USE_VL53L0X
       dist = _scan.readRangeContinuousMillimeters() / 10;
+      if (dist > DIST_MAX) dist = DIST_ALLCLEAR;
 #endif
 
       // error checking

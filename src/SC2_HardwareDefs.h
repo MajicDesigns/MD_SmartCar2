@@ -15,7 +15,7 @@ cut on a laser printer and the brass hex standoff pillars are standard dimension
 
 ![SmartCar2 Decks] (SmartCar2_Decks.png "SmartCar2 Decks")
 
-All files, including the Fusion360 model) for this design are available on 
+All files for this design, including the Fusion360 model, are available on 
 Thingiverse at https://www.thingiverse.com/majicdesigns/designs.
 
 ### Motors and Wheels
@@ -34,18 +34,15 @@ Together these create an easy and securely connected drive block.
 
 ![SmartCar2 Motor Insitu] (SmartCar2_Motor_Insitu.jpg "SmartCar2 Motor In Use")
 
-### Wheels
-
-
 \page pageMotorController Motor Controller
 
-The library is agnostic to the type of motor controller used. It manages the
-motor functions using the MD_Stepper library (https://github.com/MajicDesigns/MD_Stepper 
-or the Arduino library manager), so any controllers supported by that library can be used.
+The library manages the motor functions using the MD_Stepper library 
+(https://github.com/MajicDesigns/MD_Stepper or the Arduino library manager), 
+so any controllers supported by that library can be used.
 
-MD_SmartCar2 was developed using the inexpensive 28BYJ-48 stepper motors (12V version) 
-bundled with a ULN2003 'stepper driver' board (really just high voltage, high current 
-darlington transistor IC) that need 4 digital I/O pins to drive the motor (shown below).
+MD_SmartCar2 was developed using inexpensive 28BYJ-48 stepper motors (12V version) 
+bundled with a ULN2003 'stepper driver' board (high voltage, high current darlington 
+transistor IC) that need 4 digital I/O pins to drive the motor (shown below).
 
 ![SmartCar2 Stepper] (SmartCar2_Stepper.png "SmartCar2 Stepper Motor")
 

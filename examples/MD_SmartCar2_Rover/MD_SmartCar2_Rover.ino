@@ -3,23 +3,25 @@
 // pre-initialized and paired to the BT master.
 // 
 // This is an example of behaviors built on top of the library infrastructure.
-// High level control of the robotic vehicle is modeled after 'Behavior Based Robotics'
+// High level control of the robotic vehicle is modeled after 'Behavior Based 
+// Robotics' book.
 //
-// All vehicle behavior types can be exercised and monitored 
-// from the AI2 'SmartCar2_Rover_Control' interface application.
+// All vehicle behavior types can be exercised and monitored from the AI2 
+// 'SmartCar2_Rover_Control' interface application found with this code.
 //
-// SmartCar2_HW.h contains all the hardware I/O pin definitions.
+// SmartCar2_HW.h contains all the phuysical constants and hadware I/O 
+// pin definitions.
 // 
 // External library dependencies:
 // - PCF8574 library available from https://github.com/RobTillaart/PCF8574.git or the IDE Library Manager
 // 
 // - AltSoftSerial is available from https://github.com/PaulStoffregen/AltSoftSerial or the IDE Library Manager
-// Note: AltSoftSerial is hard coded to use digital pins 8 and 9 on the Arduino Nano.
+// Note: AltSoftSerial is hard coded to use digital pins 8 and 9 on the Arduino Nano/Uno.
 // 
 // - NewPing library available from https://bitbucket.org/teckel12/arduino-new-ping/src/master/ or the IDE Library Manager
-// Note: TIMER_ENABLED must be turned off for the NewPing library
+// Note: In NewPing.h TIMER_ENABLED must be turned off.
 // 
-// - VL53L0X library is available from 
+// - VL53L0X library is available from https://github.com/pololu/vl53l0x-arduino or the IDE Library Manager
 // 
 // - ServoTimer2 library is available from https://github.com/nabontra/ServoTimer2
 // Note: In ServoTimer2.h change MIN_PULSE_WIDTH to 500 and MAX_PULSE_WIDTH to 2500. 
@@ -62,6 +64,35 @@
 #define DEBUGS(s)
 #endif
 
+// ------------------------------------
+// Global states
+bool runEnabled = (REMOTE_START == 0);
+bool restart = true;
+
+enum behavior_t 
+{
+  ESCAPE = 0,     // emergency bumping into things or way too close. Always gets priority.
+  AVOID = 1,      // CRUISE selected, moves to best open space when it gets too close to obstacle.
+  WALLFOLLOW = 2, // follow a wall.
+  CRUISE = 3,     // default operating when nothing else is running - move straight.
+};
+
+behavior_t defaultBehavior = CRUISE;
+behavior_t runBehavior = defaultBehavior;
+behavior_t prevBehavior = runBehavior;
+
+// ------------------------------------
+// Global Variables
+// Initialize with pin sequence IN1-IN2-IN3-IN4 for using MD_Stepper with 28BYJ-48.
+// Motors should be wired identically and the change of direction happens in pin order below.
+MD_Stepper MR(PIN_INA1, PIN_INA2, PIN_INA3, PIN_INA4);  // rotate in fwd direction and ...
+MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);  // ... reverse (opposite) direction
+
+MD_SmartCar2 Car(&ML, &MR);                     // SmartCar2 control object
+AltSoftSerial BTSerial(PIN_BT_RX, PIN_BT_TX);   // BT comms link
+cBuzzer Buzzer(PIN_BUZZER);
+
+// ------------------------------------
 // BT monitoring telemetry
 #if ENABLE_TELEMETRY
 #if ENABLE_DEBUG
@@ -71,6 +102,12 @@
 #endif
 #define TEL_VALUE(s,v) do { TELStream.print(F(s)); TELStream.print(v); } while (false)
 #define TEL_MESG(s)    do { TELStream.print(F(s)); } while (false)
+#define TEL_ALARM(s)   do { TELStream.print(F("\nALARM: ")); TELStream.print(F(s)); \
+                            TELStream.print(F("\n")); Buzzer.setMode(cBuzzer::ALARM); \
+                          } while (false)
+#define TEL_PANIC(s)   do { TELStream.print(F("\nPANIC: ")); TELStream.print(F(s)); \
+                            TELStream.print(F("\n")); Buzzer.setMode(cBuzzer::PANIC); \
+                          } while (false)
 #if ENABLE_DEBUG
 #define TEL_PACKET(s)
 #else // not debug
@@ -80,35 +117,9 @@
 #define TEL_VALUE(s,v)
 #define TEL_MESG(s)
 #define TEL_PACKET(s)
+#define TEL_ALARM(s)
+#define TEL_PANIC(s)
 #endif
-
-// ------------------------------------
-// Global states
-bool runEnabled = (REMOTE_START == 0);
-
-enum behavior_t 
-{
-  ESCAPE = 0,     // emergency bumping into things or way too close. Always gets priority.
-  AVOID = 1,      // CRUISE selected, moves to best open space when it gets too close to obstacle.
-  WALLFOLLOW = 2, // follow a wall.
-  CRUISE = 3,     // default operating when nothing else is running - move straight.
-  UNDEFINED = 4   // no behavior defined
-};
-
-behavior_t defaultBehavior = CRUISE;
-behavior_t runBehavior = defaultBehavior;
-behavior_t prevBehavior = UNDEFINED;
-
-// ------------------------------------
-// Global Variables
-// Initialize with pin sequence IN1-IN2-IN3-IN4 for using the MD_Stepper with 28BYJ-48.
-// Motors should be wired identically and the change of direction happens in pin order below.
-MD_Stepper MR(PIN_INA1, PIN_INA2, PIN_INA3, PIN_INA4);  // rotate in fwd direction and ...
-MD_Stepper ML(PIN_INB2, PIN_INB1, PIN_INB4, PIN_INB3);  // ... reverse (opposite) direction
-
-MD_SmartCar2 Car(&ML, &MR);                     // SmartCar2 control object
-AltSoftSerial BTSerial(PIN_BT_RX, PIN_BT_TX);   // BT comms link
-cBuzzer Buzzer(PIN_BUZZER);
 
 // ------------------------------------
 // Scan scanning groups
@@ -145,12 +156,10 @@ bool checkHealth(void)
 
   if (Sensors.getVoltage() < V_ALARM)
   {
-    TEL_MESG("\nALARM: Battery LOW");
+    TEL_ALARM("Battery LOW");
     DEBUG("\nV Check: ", Sensors.getVoltage());
     b = false;
   }
-
-  if (!b) Buzzer.setMode(cBuzzer::ALARM);
 
   return(b);
 }
@@ -188,6 +197,7 @@ void handlerR(char* param)
   {
     if (checkHealth())
     {
+      restart = true;
       Buzzer.setMode(cBuzzer::HEARTBEAT);
       Car.setLinearVelocity(SPEED_CRUISE);
       TEL_MESG("\n>> RUN <<");
@@ -716,27 +726,44 @@ bool activateWallFollow(void)
 
 void doWallFollow(bool restart)
 // Follows wall at set distance
-// Implements and augmented algorithm based on "Virtual Triangle Wall Follower"
-// at http://faculty.salina.k-state.edu/tim/robot_prog/MobileBot/Algorithms/WallFollow.html
+// Implements a PID algorithm to control the distance
 {
-  static uint16_t timeToScan;       // time to scan around
-  static enum { IDLE, ACQ_FIRST, ACQ_NEXT, DELAY } mode = IDLE;
-  static uint32_t timeMark;         // millis timer mark
-  static float x, y[2];             // x and y coordinates for calcs
+#define PUSH_1MODE(m)    { mode = (m); nextMode = SEARCH; }
+#define PUSH_2MODE(m, n) { mode = (m); nextMode = (n); }
+#define POP_MODE         { mode = nextMode; nextMode = SEARCH; }
+
+#define DEBUG_PID 0   // info about PID on or off for tuning K's
+
+  const float kP = 0.011;
+  const float kI = 0.0;
+  const float kD = 0.004;
+
+  static struct
+  {
+    float p, i, d;              // intermediate results for debug
+    float err, errSum, errLast; // error values
+  } pid;
+  const uint32_t PID_TIME = 1000;   // in milliseconds
+  const float MAX_TURN = PI / 3;    // in radians
+
+  static enum { START, SEARCH, TURN, CONTROL_INIT, CONTROL, DELAY } nextMode = SEARCH, mode = START;
+  static uint32_t timeMark;         // millis timer marker
+  static bool longSLLFound;         // flag for long SLL (see below)
 
   // decision outcome variable for setting the trajectory
   uint8_t velocity = SPEED_MAX;     // may be changed if a decision made
-  float turn = 0;                   // may be changed if a decition is made
 
   if (restart)
   {
     runBehavior = WALLFOLLOW;
-    mode = IDLE;
+    PUSH_1MODE(START);
+    longSLLFound = false;
   }
 
-  switch(mode)
+  switch (mode)
   {
-  case IDLE:        // set it up for following
+  case START:
+    // set things up for FOLLOW
     TEL_MESG("\nFOLLOW start");
 
     Car.drive(velocity);
@@ -744,94 +771,125 @@ void doWallFollow(bool restart)
     // start scanning at front and left
     Sensors.setScanMask(SCAN_WALL);
     Sensors.setScanPeriod(SCAN_WALL_POLL);
-    timeToScan = Sensors.getSweepTime();  // how long the scan will take
     timeMark = millis();
-    mode = ACQ_FIRST;
+    POP_MODE;
     break;
 
-  case ACQ_FIRST:   // Acquire the first data point for calculations
-    // wait for a scan cycle to complete
-    if (millis() - timeMark < timeToScan)
-      break;
-
-    // set the first point for the calculations
-    y[1] = Sensors.getScan(cSensors::SLL);
-    timeMark = millis();
-    mode = ACQ_NEXT;
+  case SEARCH:
+    // Move forward looking either for a wall directly 
+    // in front or one within range on the LEFT side
+    if (Sensors.getScan(cSensors::SLL) <= (2 * DIST_WALLFOLLOW))
+    {
+      // the wall is close enough to the left side to start tracking it
+      TEL_MESG("\nFollow wall");
+      PUSH_1MODE(CONTROL_INIT);
+    }
+    else if (Sensors.getScan(cSensors::SC) <= DIST_WALLFOLLOW)
+    {
+      // something directly in front, turn left in front of it 
+      // and then start tracking 
+      TEL_VALUE("\nDetect Front ", Sensors.getScan(cSensors::SC));
+      Car.spin(25);
+      PUSH_2MODE(TURN, CONTROL_INIT);
+    }
+    else if (Sensors.getScan(cSensors::SLL) <= DIST_WALLDETECT && 
+             !longSLLFound)
+    {
+      // something on the left, turn towards it and then move to
+      // it and keep searching. longSSLLFound makes sure we only
+      // do this once as, if there are multiple targets, the vehicle 
+      // could keep giong around in circles.
+      longSLLFound = true;
+      TEL_VALUE("\nDetect Left ", Sensors.getScan(cSensors::SLL));
+      Car.spin(-25);
+      PUSH_2MODE(TURN, SEARCH);
+    }
     break;
 
-  case ACQ_NEXT:    // Acquire the next data point for calculations
-    // wait for a scan cycle to complete
-    if (millis() - timeMark < timeToScan)
-      break;
-    timeMark = millis();
+  case TURN:  // Currently in a spin turning into or away from the wall
+    // wait until the turn is complete and then 
+    // start the next mode in the stack
+    if (!Car.isRunning())
+    {
+      POP_MODE;
+      Car.drive(velocity);
+    }
+    break;
+
+  case CONTROL_INIT:
+    // essentially reset the PID
+    pid.errLast = pid.err = pid.errSum = 0.0;
+    mode = CONTROL;
+    // fall through into control
+
+  case CONTROL:    // Run the PID control
+    timeMark = millis();    // set up for next iteration
 
     // Now decide which direction to steer
     // First check if we have an object in front of us. If so we need to
     // turn to the right (+ angle) as we are following wall on the left
     if (Sensors.getScan(cSensors::SC) <= DIST_WALLFOLLOW)
     {
-      TEL_MESG("\nBLOCK ");
-      turn = PI / 4;
-      velocity = SPEED_MOVE;
-    } 
+      TEL_MESG("\nBlocked ");
+      Car.spin(13);
+      PUSH_2MODE(TURN, CONTROL_INIT);
+    }
     else
     {
-      // Run the algorithm ...
-
-      // This is a tunable constant to adjust the gain of the controller. It 
-      // should be increased if the vehicle turns too agressively and decreased 
-      // if too sluggish.
-      const uint16_t WALL_LEAD = 50;   // in cm
-          
-      // distance = speed * time (in mm) convert to cm
-      x = ((PPS_MAX * Car.getLinearVelocity()) / 100.0) * Car.getDistancePerPulse();  // speed in mm/s
-      x *= ((float)timeToScan / 1000.0);  // distance in mm
-      x /= 10.0;    // convert to cm
-
-      y[0] = y[1];  // shuffle the values along
-      y[1] = Sensors.getScan(cSensors::SLL);   // get new value
-
       // How much to steer? 
-      // Do the algorithm calculation to work out our angle towards the wall
-      // and then how much we need to turn in the next timeToScan period
-      turn = atan2(y[1] - DIST_WALLFOLLOW, x + WALL_LEAD - y[0]);
+      // Do the PID calculation to work out how much we need 
+      // to turn in the next control time period
 
-      //DEBUG("\nx=", x);
-      //DEBUG(" y1=", y[1]);
-      //DEBUG(" angle=", angle);
+      // Run the PID control calculation ...
+      pid.errLast = pid.err;    // save previous error
+      pid.err = DIST_WALLFOLLOW - Sensors.getScan(cSensors::SLL);
+      pid.errSum += pid.err;
+      pid.p = kP * pid.err;
+      pid.i = kI * pid.errSum;
+      pid.d = kD * (pid.errLast - pid.err);
+      float turn = pid.p + pid.i + pid.d;
+
+#if DEBUG_PID
+      TEL_VALUE("\nE=", pid.err);
+      TEL_VALUE(" PID=[", pid.p);
+      TEL_VALUE(" ,", pid.i);
+      TEL_VALUE(" ,", pid.d);
+      TEL_MESG("]");
+#endif
+      // keep the number in sensible bounds
+      if (abs(turn) > MAX_TURN)
+      {
+        turn = (turn < 0.0) ? -MAX_TURN : MAX_TURN;
+#if DEBUG_PID
+        TEL_MESG(" <|");
+#endif
+      }
 
       // The library needs an angular velocity (rad/s) to bring the LH 
       // side of the vehicle closer to DIST_WALLFOLLOW from the wall. 
-      // Assume the angle calculated will be turned in 1 second, so this 
-      // becomes the turning rate. Also adjust the direction from calcs 
-      // to conform to library standards.
-      turn = -turn; 
-    }
+      // Assume the angle calculated will be turned in PID_CONTROL time,
+      // so this becomes the turning rate.
+      turn *= ((float)PID_TIME / 1000.0);
 
-    // Now enact the decisions made
-    if (Car.getLinearVelocity() != velocity || Car.getAngularVelocity() != turn)
-    {
-      TEL_VALUE("\nFOLLOW LL:", Sensors.getScan(cSensors::SLL));
-      TEL_MESG(" adj");
-      //if (turn < 0) TEL_MESG(" L");
-      //if (turn > 0) TEL_MESG(" R");
-      TEL_VALUE(" r", turn);
-      Car.drive(velocity, turn);  // set the path for wall distance
-    }
-    timeMark = millis();
+      // Now enact the decisions made
+      if (Car.getLinearVelocity() != velocity || Car.getAngularVelocity() != turn)
+      {
+#if !DEBUG_PID
+        TEL_VALUE("\nFOLLOW LL:", Sensors.getScan(cSensors::SLL));
+        TEL_MESG(" adj");
+#endif
+        TEL_VALUE(" r", turn);
+        Car.drive(velocity, turn);  // set the path for wall distance
+      }
 
-    // only use the delay state if the scan time is faster that 1 s
-    if (timeToScan < 1000)
-      mode = DELAY;
+      // Wait until the PID_TIME loop has expired, the go again
+      PUSH_2MODE(DELAY, CONTROL);
+    }
     break;
 
-  case DELAY:
-    if (millis() - timeMark >= (1000 - timeToScan))
-    {
-      timeMark = millis();
-      mode = ACQ_NEXT;
-    }
+  case DELAY:   // wait for the completion of PID loop time
+    if (millis() - timeMark >= PID_TIME)
+      POP_MODE;
     break;
   }
 }
@@ -882,17 +940,17 @@ void setup(void)
 
   CP.begin();
   Buzzer.begin();
-  Sensors.begin();
+  if (!Sensors.begin())
+    TEL_PANIC("Sensors start error");
 
   if (!Car.begin(PPR, PPS_MAX, DIA_WHEEL, LEN_BASE))   // take all the defaults
-    TEL_MESG("\nUnable to start car!!\n");
+    TEL_PANIC("Unable to start car!!");
   Car.setLinearVelocity(0);    // vehicle is stopped
 }
 
 void loop(void)
 {
   static uint32_t timerHealth;
-  static bool restart = true;
 
   // ----------------------
   // Always run these background tasks

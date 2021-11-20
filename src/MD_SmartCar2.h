@@ -37,8 +37,8 @@ The library is designed to control 2 types of autonomous movements:
   control parameters for this mode type of movement.
 - _General movements_ (eg, traveling at a set speed in a set direction),
   where the ability to move more quickly in an specified path is important. 
-  This type of movement is managed using the \ref pageControlModel "unicycle 
-  model" for control coupled to \ref pagePID "PID control" of the DC motors. 
+  This type of motion is managed using \ref pageControlModel "unicycle model"
+  control calculations. 
 
 ### Library Topics
 - \subpage pageVehicleHardware
